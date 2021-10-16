@@ -1,7 +1,9 @@
 #include <msp430.h>
 #include "backchannel_uart.h"
 
-void Backchannel_UART::init()
+Backchannel_UART bcuart;
+
+void backchannel_uart_init()
 {
     // Set source clock to SMCLCK
     UCA0CTLW0 |= UCSSEL1; // could also set UCSSEL0 - SMCLK is selected with 0x0080 or 0x00C0
@@ -21,6 +23,20 @@ void Backchannel_UART::init()
     UCA0CTLW0 &= ~UCSWRST;
 }
 
-void Backchannel_UART::shutdown()
+#pragma vector = USCI_A0_VECTOR
+__interrupt void uart_backchannel_IRQ(void)
 {
+    switch (UCA0IV)
+    {
+    case (UCIV__NONE):
+        break;
+    case (UCIV__UCRXIFG):
+        break;
+    case (UCIV__UCTXIFG):
+        break;
+    case (UCIV__UCSTTIFG):
+        break;
+    case (UCIV__UCTXCPTIFG):
+        break;
+    }
 }
