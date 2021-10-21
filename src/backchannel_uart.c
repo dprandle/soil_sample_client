@@ -1,10 +1,19 @@
 #include <msp430.h>
+#include <string.h>
 #include "backchannel_uart.h"
 
 Backchannel_UART bcuart;
 
-void backchannel_uart_init()
+void bc_uart_init()
 {
+    bcuart.tx_cur_ind = 0;
+    bcuart.rx_cur_ind = 0;
+    bcuart.tx_end_ind = 0;
+    bcuart.rx_end_ind = 0;
+
+    memset(bcuart.tx_buffer, 0, BC_UART_TX_BUF_SIZE);
+    memset(bcuart.rx_buffer, 0, BC_UART_RX_BUF_SIZE);
+
     // Set source clock to SMCLCK
     UCA0CTLW0 |= UCSSEL1; // could also set UCSSEL0 - SMCLK is selected with 0x0080 or 0x00C0
 
@@ -19,24 +28,102 @@ void backchannel_uart_init()
     P1SEL1 &= ~BIT7; // Set bit 7 to 0
     P1SEL0 |= BIT7;  // Set bit 7 to 1
 
+    // Enable UCA0RXD on pin 1.6
+    P1SEL1 &= ~BIT6; // Set bit 6 to 0
+    P1SEL0 |= BIT6;  // Set bit 6 to 1
+
     // Enable UART
     UCA0CTLW0 &= ~UCSWRST;
+
+    // Enable TX and RX interrupts
+    UCA0IE = UCRXIE | UCTXIE;
+    UCA0IFG &= ~(UCRXIFG | UCTXIFG);
 }
 
-#pragma vector = USCI_A0_VECTOR
-__interrupt void uart_backchannel_IRQ(void)
+void bc_uart_tx_str(const char *str, i8 block_until_ready)
+{
+    i8 ready_to_send = (bcuart.tx_cur_ind == bcuart.tx_end_ind);
+
+    i8 sz = strlen(str);
+    for (i8 i = 0; i < sz; ++i)
+        add_byte_to_buffer(str[i]);
+    
+    if (ready_to_send)
+        send_next();
+    else if (block_until_ready)
+    {
+        while(bcuart.tx_cur_ind != bcuart.tx_end_ind);
+        send_next();
+    }
+}
+
+void bc_uart_tx_byte(i8 byte, i8 block_until_ready)
+{
+    i8 ready_to_send = (bcuart.tx_cur_ind == bcuart.tx_end_ind);
+    add_byte_to_buffer(byte);
+
+    if (ready_to_send)
+        send_next();
+    else if (block_until_ready)
+    {
+        while(bcuart.tx_cur_ind != bcuart.tx_end_ind);
+        send_next();
+    }
+}
+
+void bc_uart_rx_byte(i8 byte)
+{
+    bcuart.rx_buffer[bcuart.rx_end_ind] = byte;
+    ++bcuart.rx_end_ind;
+
+    // Wrap around if index exceeds max size of buffer
+    if (bcuart.rx_end_ind == BC_UART_RX_BUF_SIZE)
+        bcuart.rx_end_ind = 0;
+}
+
+void add_byte_to_buffer(i8 byte)
+{
+    bcuart.tx_buffer[bcuart.tx_end_ind] = byte;
+    ++bcuart.tx_end_ind;
+
+    // Wrap around if index exceeds max size of buffer
+    if (bcuart.tx_end_ind == BC_UART_TX_BUF_SIZE)
+        bcuart.tx_end_ind = 0;
+}
+
+void send_next()
+{
+    if (bcuart.tx_cur_ind != bcuart.tx_end_ind)
+    {
+        i8 b = bcuart.tx_buffer[bcuart.tx_cur_ind];
+        ++bcuart.tx_cur_ind;
+
+        // Reset back to zero if needed
+        if (bcuart.tx_cur_ind == BC_UART_TX_BUF_SIZE)
+            bcuart.tx_cur_ind = 0;
+
+        UCA0TXBUF = b;
+    }
+}
+
+ISR(USCI_A0_VECTOR)
+void uart_backchannel_IRQ(void)
 {
     switch (UCA0IV)
     {
     case (UCIV__NONE):
         break;
     case (UCIV__UCRXIFG):
+        bc_uart_rx_byte(UCA0RXBUF);
         break;
     case (UCIV__UCTXIFG):
+        send_next();
         break;
     case (UCIV__UCSTTIFG):
         break;
     case (UCIV__UCTXCPTIFG):
+        break;
+    default:
         break;
     }
 }

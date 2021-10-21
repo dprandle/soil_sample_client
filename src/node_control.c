@@ -8,25 +8,25 @@ void node_control_init()
 {
     _setup_clocks();
     _generate_mclk_on_pin();
-    backchannel_uart_init();
-}
+    bc_uart_init();
+   _EINT();
+ }
 
 void node_control_run()
 {
     P1DIR |= 0x01; // Set P1.0 to output direction
-
-    nctrl.c = 'a';
     for (;;)
     {
         volatile unsigned int i; // volatile to prevent optimization
+        P1OUT ^= 0x01;           // Toggle P1.0 using exclusive-OR
 
-        P1OUT ^= 0x01; // Toggle P1.0 using exclusive-OR
-        UCA0TXBUF = nctrl.c;
-        ++nctrl.c;
-        if (nctrl.c > 'z')
-            nctrl.c = 'a';
+        bc_uart_tx_str("Testing the first string!\n\r", 1);
+        bc_uart_tx_str("Testing byte:\n\r", 1);
+        // bc_uart_tx_byte('T');
+        // bc_uart_tx_byte('\n');
+        // bc_uart_tx_byte('\r');
 
-        i = 10000; // SW Delay
+        i = 60000; // SW Delay
         do
             i--;
         while (i != 0);
