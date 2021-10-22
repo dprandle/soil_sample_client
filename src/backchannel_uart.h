@@ -19,9 +19,9 @@ extern Backchannel_UART bcuart;
 
 void bc_uart_init();
 
-void bc_uart_tx_str(const char * str, i8 block_until_ready);
+void bc_uart_tx_str(const char * str);
 
-void bc_uart_tx_byte(i8 byte, i8 block_until_ready);
+void bc_uart_tx_byte(i8 byte);
 
 void bc_uart_rx_byte(i8 byte);
 

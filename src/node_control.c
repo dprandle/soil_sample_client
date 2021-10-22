@@ -1,4 +1,4 @@
-#include <msp430.h>
+#include <msp430fr2311.h>
 #include "node_control.h"
 #include "backchannel_uart.h"
 
@@ -19,13 +19,7 @@ void node_control_run()
     {
         volatile unsigned int i; // volatile to prevent optimization
         P1OUT ^= 0x01;           // Toggle P1.0 using exclusive-OR
-
-        bc_uart_tx_str("Testing the first string!\n\r", 1);
-        bc_uart_tx_str("Testing byte:\n\r", 1);
-        // bc_uart_tx_byte('T');
-        // bc_uart_tx_byte('\n');
-        // bc_uart_tx_byte('\r');
-
+        //bc_uart_tx_byte('T',1);
         i = 60000; // SW Delay
         do
             i--;
