@@ -1,8 +1,9 @@
-#include <msp430.h>
+#include <msp430fr2311.h>
 #include <string.h>
+#include <stdlib.h>
 #include "backchannel_uart.h"
 
-Backchannel_UART bcuart;
+Backchannel_UART bcuart = {};
 
 void bc_uart_init()
 {
@@ -40,7 +41,7 @@ void bc_uart_init()
     UCA0IFG &= ~(UCRXIFG | UCTXIFG);
 }
 
-void bc_uart_tx_str(const char *str, i8 block_until_ready)
+void bc_uart_tx_str(const char *str)
 {
     i8 ready_to_send = (bcuart.tx_cur_ind == bcuart.tx_end_ind);
 
@@ -50,25 +51,15 @@ void bc_uart_tx_str(const char *str, i8 block_until_ready)
     
     if (ready_to_send)
         send_next();
-    else if (block_until_ready)
-    {
-        while(bcuart.tx_cur_ind != bcuart.tx_end_ind);
-        send_next();
-    }
 }
 
-void bc_uart_tx_byte(i8 byte, i8 block_until_ready)
+void bc_uart_tx_byte(i8 byte)
 {
     i8 ready_to_send = (bcuart.tx_cur_ind == bcuart.tx_end_ind);
     add_byte_to_buffer(byte);
 
     if (ready_to_send)
         send_next();
-    else if (block_until_ready)
-    {
-        while(bcuart.tx_cur_ind != bcuart.tx_end_ind);
-        send_next();
-    }
 }
 
 void bc_uart_rx_byte(i8 byte)
@@ -85,7 +76,7 @@ void add_byte_to_buffer(i8 byte)
 {
     bcuart.tx_buffer[bcuart.tx_end_ind] = byte;
     ++bcuart.tx_end_ind;
-
+    
     // Wrap around if index exceeds max size of buffer
     if (bcuart.tx_end_ind == BC_UART_TX_BUF_SIZE)
         bcuart.tx_end_ind = 0;
