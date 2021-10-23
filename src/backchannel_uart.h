@@ -5,6 +5,8 @@
 #define BC_UART_RX_BUF_SIZE 32
 #define BC_UART_TX_BUF_SIZE 64
 
+extern int BC_DOUBLE_PRINT_PRECISION;
+
 typedef struct
 {
     i8 tx_buffer[BC_UART_TX_BUF_SIZE];
@@ -16,6 +18,8 @@ typedef struct
 } Backchannel_UART;
 
 extern Backchannel_UART bcuart;
+
+void bc_print(const char* fmt, ...);
 
 void bc_uart_init();
 

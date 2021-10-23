@@ -1,6 +1,7 @@
 #include <msp430fr2311.h>
 #include "node_control.h"
 #include "backchannel_uart.h"
+#include "radio_nrf24l01p.h"
 
 Node_Control nctrl;
 
@@ -9,22 +10,15 @@ void node_control_init()
     _setup_clocks();
     _generate_mclk_on_pin();
     bc_uart_init();
+    radio_nRF24L01P_init();
    _EINT();
+   bc_uart_tx_str("Init complete\n\r");
  }
 
 void node_control_run()
 {
-    P1DIR |= 0x01; // Set P1.0 to output direction
-    for (;;)
-    {
-        volatile unsigned int i; // volatile to prevent optimization
-        P1OUT ^= 0x01;           // Toggle P1.0 using exclusive-OR
-        //bc_uart_tx_byte('T',1);
-        i = 60000; // SW Delay
-        do
-            i--;
-        while (i != 0);
-    }
+    bc_uart_tx_str("Entering LPM3\r\n");
+    LPM3;
 }
 
 void node_control_shutdown()

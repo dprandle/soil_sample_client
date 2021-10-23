@@ -1,9 +1,57 @@
 #include <msp430fr2311.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdarg.h>
+
 #include "backchannel_uart.h"
 
+int BC_DOUBLE_PRINT_PRECISION = 2;
 Backchannel_UART bcuart = {};
+
+void bc_print(const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    char numbuff[8];
+    char decbuff[8];
+
+    while (*fmt != '\0')
+    {
+        if (*fmt == '%' && *(fmt + 1) != '\0')
+        {
+            ++fmt;
+            if (*fmt == 'i')
+            {
+                int i = va_arg(args, int);
+                itoa(i,numbuff,10);
+                bc_uart_tx_str(numbuff);
+            }
+            else if (*fmt == 'c')
+            {
+                int byte = va_arg(args, int);
+                bc_uart_tx_byte(byte);
+            }
+            else if (*fmt == 'f' || *fmt == 'd')
+            {
+                double d = va_arg(args, double);
+                int i = (int)d;
+                // dto(i,numbuff,10);
+                // printf("%f\n", d);
+            }
+            else
+            {
+                bc_uart_tx_byte(*fmt);
+            }
+        }
+        else
+        {
+            bc_uart_tx_byte(*fmt);
+        }
+        ++fmt;
+    }
+    bc_uart_tx_str("\r\n");
+    va_end(args);
+}
 
 void bc_uart_init()
 {
@@ -48,7 +96,7 @@ void bc_uart_tx_str(const char *str)
     i8 sz = strlen(str);
     for (i8 i = 0; i < sz; ++i)
         add_byte_to_buffer(str[i]);
-    
+
     if (ready_to_send)
         send_next();
 }
@@ -64,6 +112,9 @@ void bc_uart_tx_byte(i8 byte)
 
 void bc_uart_rx_byte(i8 byte)
 {
+    // For now just echo byte back
+    bc_uart_tx_byte(byte);
+
     bcuart.rx_buffer[bcuart.rx_end_ind] = byte;
     ++bcuart.rx_end_ind;
 
@@ -76,7 +127,7 @@ void add_byte_to_buffer(i8 byte)
 {
     bcuart.tx_buffer[bcuart.tx_end_ind] = byte;
     ++bcuart.tx_end_ind;
-    
+
     // Wrap around if index exceeds max size of buffer
     if (bcuart.tx_end_ind == BC_UART_TX_BUF_SIZE)
         bcuart.tx_end_ind = 0;
@@ -97,8 +148,7 @@ void send_next()
     }
 }
 
-ISR(USCI_A0_VECTOR)
-void uart_backchannel_IRQ(void)
+__interrupt_vec(EUSCI_A0_VECTOR) void uart_backchannel_ISR(void)
 {
     switch (UCA0IV)
     {

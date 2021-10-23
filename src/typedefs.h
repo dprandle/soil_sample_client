@@ -1,6 +1,5 @@
 #pragma once
 
-#define ISR(param) __attribute__((interrupt(param)))
 typedef unsigned char u8;
 typedef char i8;
 typedef unsigned char uchar;
