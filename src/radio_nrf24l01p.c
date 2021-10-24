@@ -5,7 +5,37 @@
 
 Radio_nRF24L01P radio = {};
 
-void radio_nRF24L01P_init()
+
+void _spi_init()
+{
+    // Set source clock to SMCLK - other bit (UCSSEL0) is don't care
+    UCB0CTLW0 |= UCSSEL1;
+    
+    // For this radio, its MSB first
+    UCB0CTLW0 |= UCMSB;
+
+    // Set as SPI master
+    UCB0CTLW0 |= UCMST;
+
+    // For this radio, slave enabled active low
+    UCB0CTLW0 |= UCMODE_2;
+
+    // Use STE to connect to CSN on radio - slave enable mode
+    UCB0CTLW0 |= UCSTEM;
+
+    // Set bitclock = SM clock - radio requires 0-10 Mbps (0? Thats what the datasheet says - would be interesting)
+    // Doesn't specify in datasheet for MSP default values - so explicitly setting to zero
+    UCB0BRW = 0;
+
+    // Enable SPI
+    UCB0CTLW0 &= ~UCSWRST;
+
+    // Enable TX and RX interrupts, then clear the interrupt flags
+    UCB0IE |= (UCTXIE | UCRXIE);
+    UCB0IFG &= ~(UCTXIFG | UCRXIFG);
+}
+
+void _pins_init()
 {
     // Set P1.0 to UCB0STE (SPI): P1SEL1.0 = 0 and P1SEL0.0 = 1
     P1SEL1 &= ~BIT0;
@@ -44,6 +74,12 @@ void radio_nRF24L01P_init()
     P2IFG &= ~BIT0;
 }
 
+void radio_nRF24L01P_init()
+{
+    _pins_init();
+    _spi_init();
+}
+
 void radio_nRF24L01P_tx_byte(i8 byte)
 {
 
@@ -54,10 +90,7 @@ void radio_nRF24L01P_rx_byte(i8 byte)
 
 }
 
-void radio_nRF24L01P_shutdown()
-{
-
-}
+void radio_nRF24L01P_shutdown(){}
 
 __interrupt_vec(PORT2_VECTOR) void port_2_isr()
 {
@@ -90,5 +123,24 @@ __interrupt_vec(PORT2_VECTOR) void port_2_isr()
         default:
             //bc_uart_tx_str("IRQ None!");
             break;
+    }
+}
+
+__interrupt_vec(EUSCI_B0_VECTOR) void spi_isr()
+{
+    switch (UCB0IV)
+    {
+    case (UCIV__NONE):
+        break;
+    case (UCIV__UCRXIFG):
+        break;
+    case (UCIV__UCTXIFG):
+        break;
+    case (UCIV__UCSTTIFG):
+        break;
+    case (UCIV__UCTXCPTIFG):
+        break;
+    default:
+        break;
     }
 }

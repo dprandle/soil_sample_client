@@ -19,8 +19,6 @@ typedef struct
 
 extern Backchannel_UART bcuart;
 
-void bc_print(const char* fmt, ...);
-
 void bc_uart_init();
 
 void bc_uart_tx_str(const char * str);
@@ -31,7 +29,10 @@ void bc_uart_rx_byte(i8 byte);
 
 void bc_uart_shutdown();
 
-// Non public
-static void send_next();
+static void _uart_init();
 
-static void add_byte_to_buffer(i8 byte);
+static void _pin_init();
+
+static void _send_next();
+
+static void _add_byte_to_buffer(i8 byte);

@@ -1,56 +1,40 @@
 #include <msp430fr2311.h>
 #include <string.h>
-#include <stdlib.h>
-#include <stdarg.h>
 
 #include "backchannel_uart.h"
 
 int BC_DOUBLE_PRINT_PRECISION = 2;
 Backchannel_UART bcuart = {};
 
-void bc_print(const char *fmt, ...)
+void _uart_init()
 {
-    va_list args;
-    va_start(args, fmt);
-    char numbuff[8];
-    char decbuff[8];
+    // Set source clock to SMCLCK
+    UCA0CTLW0 |= UCSSEL1; // could also set UCSSEL0 - SMCLK is selected with 0x0080 or 0x00C0
 
-    while (*fmt != '\0')
-    {
-        if (*fmt == '%' && *(fmt + 1) != '\0')
-        {
-            ++fmt;
-            if (*fmt == 'i')
-            {
-                int i = va_arg(args, int);
-                itoa(i,numbuff,10);
-                bc_uart_tx_str(numbuff);
-            }
-            else if (*fmt == 'c')
-            {
-                int byte = va_arg(args, int);
-                bc_uart_tx_byte(byte);
-            }
-            else if (*fmt == 'f' || *fmt == 'd')
-            {
-                double d = va_arg(args, double);
-                int i = (int)d;
-                // dto(i,numbuff,10);
-                // printf("%f\n", d);
-            }
-            else
-            {
-                bc_uart_tx_byte(*fmt);
-            }
-        }
-        else
-        {
-            bc_uart_tx_byte(*fmt);
-        }
-        ++fmt;
-    }
-    bc_uart_tx_str("\r\n");
-    va_end(args);
+    // Prescalar as selected for this SMCLK
+    UCA0BRW = 0x0003;
+
+    // Set UCBRS to AD (high byte), set UCBRF to 6 (high nibble of low byte)
+    // And enable oversampling with UCOS16 (lowest bit)
+    UCA0MCTLW = 0xAD61;
+
+    // Enable UART
+    UCA0CTLW0 &= ~UCSWRST;
+
+    // Enable TX and RX interrupts
+    UCA0IE = UCRXIE | UCTXIE;
+    UCA0IFG &= ~(UCRXIFG | UCTXIFG);
+}
+
+void _pin_init()
+{
+    // Enable UCA0TXD on pin 1.7
+    P1SEL1 &= ~BIT7; // Set bit 7 to 0
+    P1SEL0 |= BIT7;  // Set bit 7 to 1
+
+    // Enable UCA0RXD on pin 1.6
+    P1SEL1 &= ~BIT6; // Set bit 6 to 0
+    P1SEL0 |= BIT6;  // Set bit 6 to 1
 }
 
 void bc_uart_init()
@@ -62,31 +46,8 @@ void bc_uart_init()
 
     memset(bcuart.tx_buffer, 0, BC_UART_TX_BUF_SIZE);
     memset(bcuart.rx_buffer, 0, BC_UART_RX_BUF_SIZE);
-
-    // Set source clock to SMCLCK
-    UCA0CTLW0 |= UCSSEL1; // could also set UCSSEL0 - SMCLK is selected with 0x0080 or 0x00C0
-
-    // Prescalar as selected for this SMCLK
-    UCA0BRW = 0x0003;
-
-    // Set UCBRS to AD (high byte), set UCBRF to 6 (high nibble of low byte)
-    // And enable oversampling with UCOS16 (lowest bit)
-    UCA0MCTLW = 0xAD61;
-
-    // Enable UCA0TXD on pin 1.7
-    P1SEL1 &= ~BIT7; // Set bit 7 to 0
-    P1SEL0 |= BIT7;  // Set bit 7 to 1
-
-    // Enable UCA0RXD on pin 1.6
-    P1SEL1 &= ~BIT6; // Set bit 6 to 0
-    P1SEL0 |= BIT6;  // Set bit 6 to 1
-
-    // Enable UART
-    UCA0CTLW0 &= ~UCSWRST;
-
-    // Enable TX and RX interrupts
-    UCA0IE = UCRXIE | UCTXIE;
-    UCA0IFG &= ~(UCRXIFG | UCTXIFG);
+    _pin_init();
+    _uart_init();
 }
 
 void bc_uart_tx_str(const char *str)
@@ -95,19 +56,19 @@ void bc_uart_tx_str(const char *str)
 
     i8 sz = strlen(str);
     for (i8 i = 0; i < sz; ++i)
-        add_byte_to_buffer(str[i]);
+        _add_byte_to_buffer(str[i]);
 
     if (ready_to_send)
-        send_next();
+        _send_next();
 }
 
 void bc_uart_tx_byte(i8 byte)
 {
     i8 ready_to_send = (bcuart.tx_cur_ind == bcuart.tx_end_ind);
-    add_byte_to_buffer(byte);
+    _add_byte_to_buffer(byte);
 
     if (ready_to_send)
-        send_next();
+        _send_next();
 }
 
 void bc_uart_rx_byte(i8 byte)
@@ -123,7 +84,7 @@ void bc_uart_rx_byte(i8 byte)
         bcuart.rx_end_ind = 0;
 }
 
-void add_byte_to_buffer(i8 byte)
+void _add_byte_to_buffer(i8 byte)
 {
     bcuart.tx_buffer[bcuart.tx_end_ind] = byte;
     ++bcuart.tx_end_ind;
@@ -133,7 +94,7 @@ void add_byte_to_buffer(i8 byte)
         bcuart.tx_end_ind = 0;
 }
 
-void send_next()
+void _send_next()
 {
     if (bcuart.tx_cur_ind != bcuart.tx_end_ind)
     {
@@ -158,7 +119,7 @@ __interrupt_vec(EUSCI_A0_VECTOR) void uart_backchannel_ISR(void)
         bc_uart_rx_byte(UCA0RXBUF);
         break;
     case (UCIV__UCTXIFG):
-        send_next();
+        _send_next();
         break;
     case (UCIV__UCSTTIFG):
         break;
