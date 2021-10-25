@@ -7,8 +7,14 @@ Node_Control nctrl;
 
 void node_control_init()
 {
+
     _setup_clocks();
+
+    // 105 ms seems to be needed here for reset - 150 for safeness
+    // Otherwise UART gets all messed up... not sure why
+    __delay_cycles(150000);
     _generate_mclk_on_pin();
+
     bc_uart_init();
     radio_nRF24L01P_init();
     _EINT();
@@ -27,7 +33,6 @@ void node_control_run()
 
         bc_print("Entering LPM4");
         LPM4;
-        // Need approx 200 uS delay at least here or else bc_print
         __delay_cycles(250);
         bc_print("Leaving LPM4");
     }
@@ -48,8 +53,7 @@ void _setup_clocks()
 {
     WDTCTL = WDTPW | WDTHOLD; // Stop watchdog timer
 
-    // This needs to be here or else it won't let us put the MCLK on pin 2.6 for some reason after debugging
-    // I don't quite get it - but I know it happens
+    // This should really be after
     PM5CTL0 &= ~LOCKLPM5;
 
     // Set the DCOTRIM bits back to default and the DCORSEL0 to 2 MHz (also default)

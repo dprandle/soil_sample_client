@@ -1,4 +1,5 @@
 #include <msp430fr2311.h>
+#include <stdlib.h>
 
 #include "radio_nrf24l01p.h"
 #include "backchannel_uart.h"
@@ -82,7 +83,7 @@ void radio_nRF24L01P_init()
 
 void radio_nRF24L01P_tx_byte(i8 byte)
 {
-
+    UCB0TXBUF = byte;
 }
 
 void radio_nRF24L01P_rx_byte(i8 byte)
@@ -128,11 +129,15 @@ __interrupt_vec(PORT2_VECTOR) void port_2_isr()
 
 __interrupt_vec(EUSCI_B0_VECTOR) void spi_isr()
 {
+    char buf[5];
     switch (UCB0IV)
     {
     case (UCIV__NONE):
         break;
     case (UCIV__UCRXIFG):
+        bc_uart_tx_str("Received byte:");
+        itoa(UCB0RXBUF, buf, 16);
+        bc_print(buf);
         break;
     case (UCIV__UCTXIFG):
         break;

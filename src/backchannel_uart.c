@@ -1,21 +1,18 @@
 #include <msp430fr2311.h>
 #include <string.h>
 
+#include "radio_nrf24l01p.h"
 #include "backchannel_uart.h"
 
-Backchannel_UART bcuart                = {};
-void (*CHECK_FOR_COMMAND_FUNC)(void) = 0;
-char COMMANDS[COMMAND_COUNT][COMMAND_SIZE] = {{'A','B'},{'B','A'}};
-void (*COMMAND_FUNC[COMMAND_COUNT])(void) = {_command_AB, _command_BA};
+Backchannel_UART bcuart                    = {};
+void (*CHECK_FOR_COMMAND_FUNC)(void)       = 0;
+char COMMANDS[COMMAND_COUNT][COMMAND_SIZE] = {{'C', 'F'}};
+void (*COMMAND_FUNC[COMMAND_COUNT])(void)  = {_radio_write};
 
-void _command_AB()
+void _radio_write()
 {
-    bc_print("AB_Func!");
-}
-
-void _command_BA()
-{
-    bc_print("BA_Func!");
+    radio_nRF24L01P_tx_byte(R_REGISTER | EN_AA);
+    radio_nRF24L01P_tx_byte(0xFF);
 }
 
 void _uart_init()
@@ -51,13 +48,6 @@ void _pin_init()
 
 void bc_uart_init()
 {
-    bcuart.tx_cur_ind = 0;
-    bcuart.rx_cur_ind = 0;
-    bcuart.tx_end_ind = 0;
-    bcuart.rx_end_ind = 0;
-
-    memset(bcuart.tx_buffer, 0, BC_UART_TX_BUF_SIZE);
-    memset(bcuart.rx_buffer, 0, BC_UART_RX_BUF_SIZE);
     _pin_init();
     _uart_init();
 }
@@ -115,7 +105,7 @@ void _add_byte_to_tx_buffer(i8 byte)
 
 void _check_command()
 {
-    i8 cur_ind = 0;
+    i8 cur_ind             = 0;
     void (*func_ptr)(void) = 0;
     while (bcuart.rx_cur_ind != bcuart.rx_end_ind)
     {
