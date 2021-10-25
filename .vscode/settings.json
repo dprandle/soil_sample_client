@@ -7,6 +7,7 @@
         "msp430fr2311.h": "c",
         "iomacros.h": "c",
         "typedefs.h": "c",
-        "in430.h": "c"
+        "in430.h": "c",
+        "backchannel_uart.h": "c"
     }
 }

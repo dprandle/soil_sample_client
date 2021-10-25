@@ -11,19 +11,30 @@ void node_control_init()
     _generate_mclk_on_pin();
     bc_uart_init();
     radio_nRF24L01P_init();
-   _EINT();
-   bc_uart_tx_str("Init complete\n\r");
- }
+    _EINT();
+    bc_print("\n\n\r---- Init complete ----");
+}
 
 void node_control_run()
 {
-    bc_uart_tx_str("Entering LPM3\r\n");
-    LPM3;
+    while (1)
+    {
+        if (CHECK_FOR_COMMAND_FUNC)
+        {
+            CHECK_FOR_COMMAND_FUNC();
+            CHECK_FOR_COMMAND_FUNC = 0;
+        }
+
+        bc_print("Entering LPM4");
+        LPM4;
+        // Need approx 200 uS delay at least here or else bc_print
+        __delay_cycles(250);
+        bc_print("Leaving LPM4");
+    }
 }
 
 void node_control_shutdown()
-{
-}
+{}
 
 void _generate_mclk_on_pin()
 {
