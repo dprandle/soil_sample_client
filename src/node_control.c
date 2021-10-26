@@ -15,10 +15,10 @@ void node_control_init()
     __delay_cycles(150000);
     _generate_mclk_on_pin();
 
-    bc_uart_init();
+    bc_init();
     radio_nRF24L01P_init();
     _EINT();
-    bc_print("\n\n\r---- Init complete ----");
+    bc_print_crlf("\n\n\r---- Init complete ----");
 }
 
 void node_control_run()
@@ -31,10 +31,10 @@ void node_control_run()
             CHECK_FOR_COMMAND_FUNC = 0;
         }
 
-        bc_print("Entering LPM4");
+        bc_print_crlf("Entering LPM4");
         LPM4;
         __delay_cycles(250);
-        bc_print("Leaving LPM4");
+        bc_print_crlf("Leaving LPM4");
     }
 }
 

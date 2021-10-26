@@ -1,18 +1,24 @@
 #include <msp430fr2311.h>
 #include <string.h>
 
+#include <stdlib.h>
+
+//#include "util.h"
 #include "radio_nrf24l01p.h"
 #include "backchannel_uart.h"
 
-Backchannel_UART bcuart                    = {};
 void (*CHECK_FOR_COMMAND_FUNC)(void)       = 0;
 char COMMANDS[COMMAND_COUNT][COMMAND_SIZE] = {{'C', 'F'}};
 void (*COMMAND_FUNC[COMMAND_COUNT])(void)  = {_radio_write};
 
+Ring_Buffer bc_tx = {};
+Ring_Buffer bc_rx = {};
+
 void _radio_write()
 {
-    radio_nRF24L01P_tx_byte(R_REGISTER | EN_AA);
-    radio_nRF24L01P_tx_byte(0xFF);
+    bc_print_crlf("--- Exec ---");
+    radio_nRF24L01P_read_register(EN_AA);
+    bc_print_crlf("\n\r--- Done ---");
 }
 
 void _uart_init()
@@ -46,128 +52,101 @@ void _pin_init()
     P1SEL0 |= BIT6;  // Set bit 6 to 1
 }
 
-void bc_uart_init()
+void bc_init()
 {
     _pin_init();
     _uart_init();
 }
 
+void bc_print_crlf(const char * str)
+{
+    bc_print(str);
+    bc_print("\r\n");
+}
+
 void bc_print(const char * str)
 {
-    bc_uart_tx_str(str);
-    bc_uart_tx_str("\r\n");
-}
-
-void bc_uart_tx_str(const char * str)
-{
-    i8 ready_to_send = (bcuart.tx_cur_ind == bcuart.tx_end_ind);
-
-    const char * cur = str;
-    while (*cur != '\0')
-    {
-        _add_byte_to_tx_buffer(*cur);
-        ++cur;
-    }
-
-    if (ready_to_send)
+    i8 cnt = rb_write_str(str, &bc_tx);
+    if (cnt == rb_bytes_available(&bc_tx))
         _send_next();
 }
 
-void bc_uart_tx_buffer(i8 * data, i8 size)
+void bc_print_byte(i8 byte, i8 base)
 {
-    i8 ready_to_send = (bcuart.tx_cur_ind == bcuart.tx_end_ind);
-
-    for (i8 i = 0; i < size; ++i)
-        _add_byte_to_tx_buffer(data[i]);
-
-    if (ready_to_send)
+    i8 buf[8];
+    itoa(byte,buf,base);
+    i8 cnt = rb_write_str(buf, &bc_tx);
+    if (cnt == rb_bytes_available(&bc_tx))
         _send_next();
 }
 
-void bc_uart_tx_byte(i8 byte)
+void bc_print_raw(i8 byte)
 {
-    i8 ready_to_send = (bcuart.tx_cur_ind == bcuart.tx_end_ind);
-    _add_byte_to_tx_buffer(byte);
-
-    if (ready_to_send)
+    rb_write(&byte, 1, &bc_tx);
+    if (rb_bytes_available(&bc_tx) == 1)
         _send_next();
 }
 
-void _add_byte_to_tx_buffer(i8 byte)
+void bc_print_int(i16 val, i8 base)
 {
-    bcuart.tx_buffer[bcuart.tx_end_ind] = byte;
-    ++bcuart.tx_end_ind;
-
-    // Wrap around if index exceeds max size of buffer
-    if (bcuart.tx_end_ind == BC_UART_TX_BUF_SIZE)
-        bcuart.tx_end_ind = 0;
+    char buf[16];
+    itoa(val,buf,base);
+    i8 cnt = rb_write_str(buf, &bc_tx);
+    if (cnt == rb_bytes_available(&bc_tx))
+        _send_next();
 }
 
 void _check_command()
 {
     i8 cur_ind             = 0;
     void (*func_ptr)(void) = 0;
-    while (bcuart.rx_cur_ind != bcuart.rx_end_ind)
+    while (bc_rx.cur_ind != bc_rx.end_ind)
     {
         for (i8 i = 0; i < COMMAND_COUNT; ++i)
         {
-            if (COMMANDS[i][cur_ind] == bcuart.rx_buffer[bcuart.rx_cur_ind])
+            if (COMMANDS[i][cur_ind] == bc_rx.data[bc_rx.cur_ind])
                 func_ptr = COMMAND_FUNC[i];
         }
 
         ++cur_ind;
-        ++bcuart.rx_cur_ind;
-        if (bcuart.rx_cur_ind == BC_UART_RX_BUF_SIZE)
-            bcuart.rx_cur_ind = 0;
+        ++bc_rx.cur_ind;
+        if (bc_rx.cur_ind == RING_BUFFER_SIZE)
+            bc_rx.cur_ind = 0;
+        
         if (cur_ind == COMMAND_SIZE || !func_ptr)
         {
-            bcuart.rx_cur_ind = bcuart.rx_end_ind;
+            bc_rx.cur_ind = bc_rx.end_ind;
             if (func_ptr)
                 func_ptr();
         }
     }
 }
 
-void _add_byte_to_rx_buffer(i8 byte)
-{
-    // For now just echo byte back
-    bc_uart_tx_byte(byte);
-    if (byte == '\r')
-        bc_uart_tx_byte('\n');
-
-    bcuart.rx_buffer[bcuart.rx_end_ind] = byte;
-    ++bcuart.rx_end_ind;
-
-    // Wrap around if index exceeds max size of buffer
-    if (bcuart.rx_end_ind == BC_UART_RX_BUF_SIZE)
-        bcuart.rx_end_ind = 0;
-}
-
 void _send_next()
 {
-    if (bcuart.tx_cur_ind != bcuart.tx_end_ind)
-    {
-        i8 b = bcuart.tx_buffer[bcuart.tx_cur_ind];
-        ++bcuart.tx_cur_ind;
-
-        // Reset back to zero if needed
-        if (bcuart.tx_cur_ind == BC_UART_TX_BUF_SIZE)
-            bcuart.tx_cur_ind = 0;
-
+    i8 b;
+    if (rb_read(&b, 1, &bc_tx))
         UCA0TXBUF = b;
-    }
 }
 
 __interrupt_vec(EUSCI_A0_VECTOR) void uart_backchannel_ISR(void)
 {
+    i8 byte = 0;
     switch (UCA0IV)
     {
     case (UCIV__NONE):
         break;
     case (UCIV__UCRXIFG):
-        _add_byte_to_rx_buffer(UCA0RXBUF);
-        if (UCA0RXBUF == '\r')
+        
+        byte = UCA0RXBUF;
+        rb_write(&byte, 1, &bc_rx);
+        
+        // Echo with newline if \r
+        bc_print_raw(byte);
+        
+        if (byte == '\r')
         {
+            bc_print_raw('\n');
             CHECK_FOR_COMMAND_FUNC = _check_command;
             LPM4_EXIT;
         }
