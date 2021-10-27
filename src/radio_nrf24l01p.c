@@ -21,15 +21,15 @@ void _spi_init()
     // Set as SPI master
     UCB0CTLW0 |= UCMST;
 
-    // For this radio, slave enabled active low
-    UCB0CTLW0 |= UCMODE_2;
+    // // For this radio, slave enabled active low
+    // UCB0CTLW0 |= UCMODE_2;
 
     // Use STE to connect to CSN on radio - slave enable mode
-    UCB0CTLW0 |= UCSTEM;
+    // UCB0CTLW0 |= UCSTEM;
 
     // Set bitclock = SM clock - radio requires 0-10 Mbps (0? Thats what the datasheet says - would be interesting)
     // Doesn't specify in datasheet for MSP default values - so explicitly setting to zero
-    UCB0BRW = 20;
+    UCB0BRW = 0;
 
     // Enable SPI
     UCB0CTLW0 &= ~UCSWRST;
@@ -44,9 +44,16 @@ void _pins_init()
     // You must either use all P1 SPI pins, or all P2 SPI pins - you can't mix
     // Choose which ones are used by setting USSCIBRMP = 0 for P1 and USSCIBRMP = 1 for P2 in SYSCFG2 register
 
-    // Set P1.0 to UCB0STE (SPI): P1SEL1.0 = 0 and P1SEL0.0 = 1
-    P1SEL1 &= ~BIT0;
-    P1SEL0 |= BIT0;
+    // Set P1.0 to CSN for Radio. Tried to use STE - it works for SPI speeds significantly less than MCLK: success of multi byte transfers become dependent
+    // on how many cycles your code takes to run - this is because the TX buffer is one byte. The interrupt triggers, you add another, but all of that stuff
+    // takes time and if the SPI clock is anywhere close to MCLK, the STE will go high again between multi byte transfers. Using GPIO gives straight forward
+    // control. Set high initially - pull low on transmit.
+    P1DIR |= BIT0;
+    P1OUT |= BIT0;
+
+    // P1SEL1 &= ~BIT0;
+    // P1SEL0 |= BIT0;
+
 
     // Set P1.1 to USB0CLK (SPI): P2SEL1.3 = 0 and P2SEL0.3 = 1
     P1SEL1 &= ~BIT1;
@@ -96,7 +103,10 @@ void radio_nRF24L01P_read_register(i8 regaddr)
     //cmdword[0] = regaddr;
     rb_write(cmdword, 2, &rad_tx);
     if (rb_bytes_available(&rad_tx) == 2)
+    {
+        P1OUT &= ~BIT0;
         _send_next();
+    }
 }
 
 void radio_nRF24L01P_rx_byte(i8 byte)
@@ -112,6 +122,10 @@ void _send_next()
         if (rad_tx.cur_ind == RING_BUFFER_SIZE)
             rad_tx.cur_ind = 0;
         UCB0TXBUF = b;
+    }
+    else
+    {
+        P1OUT |= BIT0;
     }
 }
 
