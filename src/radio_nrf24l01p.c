@@ -12,6 +12,9 @@ void _spi_init()
     // Set source clock to SMCLK - other bit (UCSSEL0) is don't care
     UCB0CTLW0 |= UCSSEL1;
 
+    UCB0CTLW0 |= UCCKPH;
+    //UCB0CTLW0 |= UCCKPL;
+
     // For this radio, its MSB first
     UCB0CTLW0 |= UCMSB;
 
@@ -89,7 +92,7 @@ void radio_nRF24L01P_init()
 
 void radio_nRF24L01P_read_register(i8 regaddr)
 {
-    static i8 cmdword[2] = {0x01, 0xFF};
+    static i8 cmdword[2] = {0x02, 0xFF};
     //cmdword[0] = regaddr;
     rb_write(cmdword, 2, &rad_tx);
     if (rb_bytes_available(&rad_tx) == 2)
@@ -103,12 +106,10 @@ void _send_next()
 {
     if (rad_tx.cur_ind != rad_tx.end_ind)
     {
-        i8 b = rad_tx.data[rad_tx.cur_ind];
         ++rad_tx.cur_ind;
-
         if (rad_tx.cur_ind == RING_BUFFER_SIZE)
             rad_tx.cur_ind = 0;
-        UCB0TXBUF = b;
+        UCB0TXBUF = rad_tx.data[rad_tx.cur_ind-1];
     }
 }
 
@@ -148,6 +149,7 @@ __interrupt_vec(PORT2_VECTOR) void port_2_isr()
 
 __interrupt_vec(EUSCI_B0_VECTOR) void spi_isr()
 {
+    static i8 b = 0;
     switch (UCB0IV)
     {
     case (UCIV__NONE):
