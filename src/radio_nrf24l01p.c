@@ -56,8 +56,8 @@ void _pins_init()
     P1SEL1 &= ~BIT3;
     P1SEL0 |= BIT3;
     P1REN |= BIT3;
-    P1DIR &= ~BIT3;
-    P1OUT &= ~BIT3;
+    //P1DIR &= ~BIT3;
+    P1OUT |= BIT3;
 
     // Set P1.2 to USB0SIMO (SPI): P1SEL1.2 = 0 and P1SEL0.2 = 1
     P1SEL1 &= ~BIT2;
@@ -104,12 +104,14 @@ void radio_nRF24L01P_rx_byte(i8 byte)
 
 void _send_next()
 {
+    static i8 b = 0;
     if (rad_tx.cur_ind != rad_tx.end_ind)
     {
+        b = rad_tx.data[rad_tx.cur_ind];
         ++rad_tx.cur_ind;
         if (rad_tx.cur_ind == RING_BUFFER_SIZE)
             rad_tx.cur_ind = 0;
-        UCB0TXBUF = rad_tx.data[rad_tx.cur_ind-1];
+        UCB0TXBUF = b;
     }
 }
 

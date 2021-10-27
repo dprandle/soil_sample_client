@@ -16,9 +16,7 @@ Ring_Buffer bc_rx = {};
 
 void _radio_write()
 {
-    bc_print_crlf("--- Exec ---");
     radio_nRF24L01P_read_register(EN_AA);
-    bc_print_crlf("\n\r--- Done ---");
 }
 
 void _uart_init()
@@ -124,9 +122,15 @@ void _check_command()
 
 void _send_next()
 {
-    i8 b;
-    if (rb_read(&b, 1, &bc_tx))
+    static i8 b = 0;
+    if (bc_tx.cur_ind != bc_tx.end_ind)
+    {
+        b = bc_tx.data[bc_tx.cur_ind];
+        ++bc_tx.cur_ind;
+        if (bc_tx.cur_ind == RING_BUFFER_SIZE)
+            bc_tx.cur_ind = 0;
         UCA0TXBUF = b;
+    }
 }
 
 __interrupt_vec(EUSCI_A0_VECTOR) void uart_backchannel_ISR(void)

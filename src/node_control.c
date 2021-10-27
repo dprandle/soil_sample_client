@@ -33,8 +33,8 @@ void node_control_run()
 
         bc_print_crlf("Entering LPM4");
         LPM4;
-        __delay_cycles(250);
-        bc_print_crlf("Leaving LPM4");
+        bc_print_crlf("Leaving LPM4 ");
+        //__delay_cycles(250);
     }
 }
 
