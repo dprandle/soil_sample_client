@@ -19,11 +19,7 @@ void bc_print(const char * str);
 
 void bc_print_crlf(const char * str);
 
-void bc_print_raw(i8 byte);
-
-void bc_print_byte(i8 byte, i8 base);
-
-void bc_print_int(i16 val, i8 base);
+void bc_print_byte(i8 byte);
 
 static void _radio_write();
 

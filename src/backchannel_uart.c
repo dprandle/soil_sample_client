@@ -1,9 +1,5 @@
 #include <msp430.h>
-#include <string.h>
 
-#include <stdlib.h>
-
-//#include "util.h"
 #include "radio_nrf24l01p.h"
 #include "backchannel_uart.h"
 
@@ -24,12 +20,13 @@ void _uart_init()
     // Set source clock to SMCLCK
     UCA0CTLW0 |= UCSSEL1; // could also set UCSSEL0 - SMCLK is selected with 0x0080 or 0x00C0
 
+    // The following is for 9600 Baud with 4 MHz clock
     // Prescalar as selected for this SMCLK
-    UCA0BRW = 0x0003;
+    UCA0BRW = 26;
 
-    // Set UCBRS to AD (high byte), set UCBRF to 6 (high nibble of low byte)
+    // Set UCBRS to B6 (high byte), set UCBRF to 0 (high nibble of low byte)
     // And enable oversampling with UCOS16 (lowest bit)
-    UCA0MCTLW = 0xAD61;
+    UCA0MCTLW = 0xB601;
 
     // Enable UART
     UCA0CTLW0 &= ~UCSWRST;
@@ -69,28 +66,10 @@ void bc_print(const char * str)
         _send_next();
 }
 
-void bc_print_byte(i8 byte, i8 base)
-{
-    i8 buf[8];
-    itoa(byte,buf,base);
-    i8 cnt = rb_write_str(buf, &bc_tx);
-    if (cnt == rb_bytes_available(&bc_tx))
-        _send_next();
-}
-
-void bc_print_raw(i8 byte)
+void bc_print_byte(i8 byte)
 {
     rb_write(&byte, 1, &bc_tx);
     if (rb_bytes_available(&bc_tx) == 1)
-        _send_next();
-}
-
-void bc_print_int(i16 val, i8 base)
-{
-    char buf[16];
-    itoa(val,buf,base);
-    i8 cnt = rb_write_str(buf, &bc_tx);
-    if (cnt == rb_bytes_available(&bc_tx))
         _send_next();
 }
 
@@ -146,11 +125,11 @@ __interrupt_vec(EUSCI_A0_VECTOR) void uart_backchannel_ISR(void)
         rb_write(&byte, 1, &bc_rx);
         
         // Echo with newline if \r
-        bc_print_raw(byte);
+        bc_print_byte(byte);
         
         if (byte == '\r')
         {
-            bc_print_raw('\n');
+            bc_print_byte('\n');
             CHECK_FOR_COMMAND_FUNC = _check_command;
             LPM4_EXIT;
         }

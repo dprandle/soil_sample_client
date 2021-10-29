@@ -19,7 +19,7 @@ void node_control_init()
     bc_init();
     radio_nRF24L01P_init();
     _EINT();
-    bc_print_crlf("\n\n\r---- Init complete ----");
+    bc_print_crlf("\n\n\rInitialized");
 }
 
 void node_control_run()
@@ -57,11 +57,16 @@ void _setup_clocks()
     // This should really be after
     PM5CTL0 &= ~LOCKLPM5;
 
-    // Set the DCOTRIM bits back to default and the DCORSEL0 to 2 MHz (also default)
-    // and set the modulation to enabled
-    CSCTL1 = DCOFTRIM0 | DCOFTRIM1 | DCORSEL0 | DISMOD;
+    // Unset all dcorsel bits, then set for 16 MHz
+    CSCTL1 &= ~DCORSEL;
+    CSCTL1 |=  DCORSEL_5;
 
-    // Set FLLD to 1 (devide DCOCLK by 2) as default, set FLLN to default value
-    // This results in DCOCLK = 2.097152 MHz clock, and DCOCLKDIV of 1.048600 MHz
-    CSCTL2 = FLLD0 | 0x001F;
+    // We want FLLD at 1 (16 MHz operation) and FLLN at 487
+    // This produces DCOCLK and DCOCLKDIV of (FLLN + 1)(REFO) = (487 + 1)(32768) = 15.990784 MHz
+    CSCTL2 &= ~(FLLD | FLLN);
+    CSCTL2 |= (FLLD_0 | 0x01E7);
+
+    // We don't need so high for SMCLK - divide by 4.. would divide by 8 but baud rate doesn't work
+    // out with 2 MHz clock source
+    CSCTL5 |= DIVS_2;
 }

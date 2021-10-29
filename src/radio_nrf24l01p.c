@@ -171,7 +171,7 @@ __interrupt_vec(EUSCI_B0_VECTOR) void spi_isr()
     case (UCIV__NONE):
         break;
     case (UCIV__UCRXIFG):
-        bc_print_raw(UCB0RXBUF);
+        bc_print_byte(UCB0RXBUF);
         break;
     case (UCIV__UCTXIFG):
         _send_next();
