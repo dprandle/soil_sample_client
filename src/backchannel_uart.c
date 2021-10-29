@@ -22,11 +22,11 @@ void _uart_init()
 
     // The following is for 9600 Baud with 4 MHz clock
     // Prescalar as selected for this SMCLK
-    UCA0BRW = 26;
+    UCA0BRW = 13;
 
     // Set UCBRS to B6 (high byte), set UCBRF to 0 (high nibble of low byte)
     // And enable oversampling with UCOS16 (lowest bit)
-    UCA0MCTLW = 0xB601;
+    UCA0MCTLW = 0x8401;
 
     // Enable UART
     UCA0CTLW0 &= ~UCSWRST;
@@ -120,19 +120,19 @@ __interrupt_vec(EUSCI_A0_VECTOR) void uart_backchannel_ISR(void)
     case (UCIV__NONE):
         break;
     case (UCIV__UCRXIFG):
-        
         byte = UCA0RXBUF;
+        UCA0TXBUF = byte;
         rb_write(&byte, 1, &bc_rx);
         
         // Echo with newline if \r
-        bc_print_byte(byte);
+        // bc_print_byte(byte);
         
-        if (byte == '\r')
-        {
-            bc_print_byte('\n');
-            CHECK_FOR_COMMAND_FUNC = _check_command;
-            LPM4_EXIT;
-        }
+        // if (byte == '\r')
+        // {
+        //     bc_print_byte('\n');
+        //     CHECK_FOR_COMMAND_FUNC = _check_command;
+        //     LPM4_EXIT;
+        // }
         break;
     case (UCIV__UCTXIFG):
         _send_next();
