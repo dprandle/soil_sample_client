@@ -1,4 +1,4 @@
-#include <msp430fr2311.h>
+#include <msp430.h>
 #include <string.h>
 
 #include <stdlib.h>

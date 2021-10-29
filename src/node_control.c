@@ -1,4 +1,5 @@
-#include <msp430fr2311.h>
+#include <msp430.h>
+
 #include "node_control.h"
 #include "backchannel_uart.h"
 #include "radio_nrf24l01p.h"

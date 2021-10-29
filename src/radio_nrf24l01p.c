@@ -1,4 +1,4 @@
-#include <msp430fr2311.h>
+#include <msp430.h>
 #include <stdlib.h>
 
 #include "radio_nrf24l01p.h"
@@ -171,8 +171,7 @@ __interrupt_vec(EUSCI_B0_VECTOR) void spi_isr()
     case (UCIV__NONE):
         break;
     case (UCIV__UCRXIFG):
-        bc_print_byte(UCB0RXBUF, 16);
-        bc_print_raw(' ');
+        bc_print_raw(UCB0RXBUF);
         break;
     case (UCIV__UCTXIFG):
         _send_next();
