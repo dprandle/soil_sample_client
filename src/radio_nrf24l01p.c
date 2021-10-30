@@ -29,7 +29,7 @@ void _spi_init()
 
     // Set bitclock = SM clock - radio requires 0-10 Mbps (0? Thats what the datasheet says - would be interesting)
     // Doesn't specify in datasheet for MSP default values - so explicitly setting to zero
-    UCB0BRW = 0;
+    UCB0BRW = 100;
 
     // Enable SPI
     UCB0CTLW0 &= ~UCSWRST;
@@ -99,7 +99,7 @@ void radio_nRF24L01P_init()
 
 void radio_nRF24L01P_read_register(i8 regaddr)
 {
-    static i8 cmdword[2] = {0x02, 0xFF};
+    static i8 cmdword[2] = {0x01, 0xFF};
     //cmdword[0] = regaddr;
     rb_write(cmdword, 2, &rad_tx);
     if (rb_bytes_available(&rad_tx) == 2)
@@ -166,12 +166,15 @@ __interrupt_vec(PORT2_VECTOR) void port_2_isr()
 __interrupt_vec(EUSCI_B0_VECTOR) void spi_isr()
 {
     static i8 b = 0;
+    char buff[3];
     switch (UCB0IV)
     {
     case (UCIV__NONE):
         break;
     case (UCIV__UCRXIFG):
-        bc_print_byte(UCB0RXBUF);
+        b = UCB0RXBUF;
+        itoa(b, buff, 16);
+        bc_print_crlf(buff);
         break;
     case (UCIV__UCTXIFG):
         _send_next();
