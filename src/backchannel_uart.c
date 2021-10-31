@@ -99,17 +99,14 @@ void _check_command()
     }
 }
 
-void _send_next()
+inline void _send_next()
 {
     static i8 b = 0;
-    if (bc_tx.cur_ind != bc_tx.end_ind)
-    {
-        b = bc_tx.data[bc_tx.cur_ind];
-        ++bc_tx.cur_ind;
-        if (bc_tx.cur_ind == RING_BUFFER_SIZE)
-            bc_tx.cur_ind = 0;
-        UCA0TXBUF = b;
-    }
+    b           = bc_tx.data[bc_tx.cur_ind];
+    ++bc_tx.cur_ind;
+    if (bc_tx.cur_ind == RING_BUFFER_SIZE)
+        bc_tx.cur_ind = 0;
+    UCA0TXBUF = b;
 }
 
 __interrupt_vec(EUSCI_A0_VECTOR) void uart_backchannel_ISR(void)
@@ -121,7 +118,7 @@ __interrupt_vec(EUSCI_A0_VECTOR) void uart_backchannel_ISR(void)
         break;
     case (UCIV__UCRXIFG):
         byte = UCA0RXBUF;
-        rb_write(&byte, 1, &bc_rx);
+        rb_write_byte(byte, &bc_rx);
 
         // Echo with newline if \r
         if (byte == '\r')
@@ -136,7 +133,8 @@ __interrupt_vec(EUSCI_A0_VECTOR) void uart_backchannel_ISR(void)
         }
         break;
     case (UCIV__UCTXIFG):
-        _send_next();
+        if (bc_tx.cur_ind != bc_tx.end_ind)
+            _send_next();
         break;
     case (UCIV__UCSTTIFG):
         break;

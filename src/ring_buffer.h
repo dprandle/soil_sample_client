@@ -20,4 +20,4 @@ i8 rb_read(i8 * dest_buf, i8 max_size, Ring_Buffer * source_buf);
 
 i8 rb_read_str(char * str, i8 str_buffer_max_size, Ring_Buffer * source_buf);
 
-static void _write_byte(i8 byte, Ring_Buffer * buf);
+void rb_write_byte(i8 byte, Ring_Buffer * buf);

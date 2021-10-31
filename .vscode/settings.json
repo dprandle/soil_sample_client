@@ -9,6 +9,7 @@
         "typedefs.h": "c",
         "in430.h": "c",
         "backchannel_uart.h": "c",
-        "ring_buffer.h": "c"
+        "ring_buffer.h": "c",
+        "radio_nrf24l01p.h": "c"
     }
 }

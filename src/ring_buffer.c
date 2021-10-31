@@ -13,7 +13,7 @@ i8 rb_write_str(const char * str, Ring_Buffer * buf)
     i8 ind = 0;
     while (str[ind] != '\0')
     {
-        _write_byte(str[ind], buf);
+        rb_write_byte(str[ind], buf);
         ++ind;
     }
     return ind;
@@ -22,7 +22,7 @@ i8 rb_write_str(const char * str, Ring_Buffer * buf)
 void rb_write(i8 * data, i8 size, Ring_Buffer * buf)
 {
     for (i8 i = 0; i < size; ++i)
-        _write_byte(data[i], buf);
+        rb_write_byte(data[i], buf);
 }
 
 i8 rb_read(i8 * dest_buf, i8 max_size, Ring_Buffer * source_buf)
@@ -59,8 +59,7 @@ i8 rb_read_str(char * str, i8 str_buffer_max_size, Ring_Buffer * source_buf)
     return ret;
 }
 
-
-void _write_byte(i8 byte, Ring_Buffer * buf)
+void rb_write_byte(i8 byte, Ring_Buffer * buf)
 {
     buf->data[buf->end_ind] = byte;
     ++buf->end_ind;

@@ -185,11 +185,13 @@ extern Ring_Buffer rad_rx;
 
 void radio_nRF24L01P_init();
 
+void radio_nRF24L01P_burst_transmit();
+
 void radio_nRF24L01P_read_register(i8 regaddr);
 
 void radio_nRF24L01P_rx_byte(i8 byte);
 
-static void _send_next();
+static inline void _send_next();
 
 static void _spi_init();
 

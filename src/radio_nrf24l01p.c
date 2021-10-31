@@ -1,11 +1,11 @@
 #include <msp430.h>
-#include <stdlib.h>
 
 #include "radio_nrf24l01p.h"
 #include "backchannel_uart.h"
 
-Ring_Buffer rad_tx = {};
-Ring_Buffer rad_rx = {};
+Ring_Buffer        rad_tx = {};
+Ring_Buffer        rad_rx = {};
+static volatile i8 scooby = 0;
 
 void _spi_init()
 {
@@ -24,12 +24,12 @@ void _spi_init()
     // // For this radio, slave enabled active low
     // UCB0CTLW0 |= UCMODE_2;
 
-    // Use STE to connect to CSN on radio - slave enable mode
+    // // Use STE to connect to CSN on radio - slave enable mode
     // UCB0CTLW0 |= UCSTEM;
 
     // Set bitclock = SM clock - radio requires 0-10 Mbps (0? Thats what the datasheet says - would be interesting)
     // Doesn't specify in datasheet for MSP default values - so explicitly setting to zero
-    UCB0BRW = 100;
+    UCB0BRW = 2;
 
     // Enable SPI
     UCB0CTLW0 &= ~UCSWRST;
@@ -50,10 +50,8 @@ void _pins_init()
     // control. Set high initially - pull low on transmit.
     P1DIR |= BIT0;
     P1OUT |= BIT0;
-
     // P1SEL1 &= ~BIT0;
     // P1SEL0 |= BIT0;
-
 
     // Set P1.1 to USB0CLK (SPI): P2SEL1.3 = 0 and P2SEL0.3 = 1
     P1SEL1 &= ~BIT1;
@@ -63,7 +61,7 @@ void _pins_init()
     P1SEL1 &= ~BIT3;
     P1SEL0 |= BIT3;
     P1REN |= BIT3;
-    //P1DIR &= ~BIT3;
+    P1DIR &= ~BIT3;
     P1OUT |= BIT3;
 
     // Set P1.2 to USB0SIMO (SPI): P1SEL1.2 = 0 and P1SEL0.2 = 1
@@ -99,34 +97,47 @@ void radio_nRF24L01P_init()
 
 void radio_nRF24L01P_read_register(i8 regaddr)
 {
-    static i8 cmdword[2] = {0x01, 0xFF};
+    static i8 cmdword[] = {W_TX_PAYLOAD, 0x55, 0X55, 0X55, 0X55, 0X55, 0X55, 0X55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55,
+                           0x55,         0X55, 0X55, 0X55, 0X55, 0X55, 0X55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55};
     //cmdword[0] = regaddr;
-    rb_write(cmdword, 2, &rad_tx);
-    if (rb_bytes_available(&rad_tx) == 2)
+    rb_write(cmdword, 33, &rad_tx);
+    if (rb_bytes_available(&rad_tx) == 33)
     {
-        P1OUT &= ~BIT0;
-        _send_next();
+        radio_nRF24L01P_burst_transmit();
+        // scooby = 8;
+        // P1OUT &= ~BIT0;
+        // _send_next();
     }
 }
 
 void radio_nRF24L01P_rx_byte(i8 byte)
 {}
 
-void _send_next()
+inline void _send_next()
 {
     static i8 b = 0;
-    if (rad_tx.cur_ind != rad_tx.end_ind)
+    b           = rad_tx.data[rad_tx.cur_ind];
+    ++rad_tx.cur_ind;
+    if (rad_tx.cur_ind == RING_BUFFER_SIZE)
+        rad_tx.cur_ind = 0;
+    UCB0TXBUF = b;
+}
+
+void radio_nRF24L01P_burst_transmit()
+{
+    // Enable TX and RX interrupts
+    bc_print_crlf("Here");
+    UCB0IE &= ~(UCTXIE | UCRXIE);
+    P1OUT &= ~BIT0;
+    do
     {
-        b = rad_tx.data[rad_tx.cur_ind];
-        ++rad_tx.cur_ind;
-        if (rad_tx.cur_ind == RING_BUFFER_SIZE)
-            rad_tx.cur_ind = 0;
-        UCB0TXBUF = b;
-    }
-    else
-    {
-        P1OUT |= BIT0;
-    }
+        UCB0IFG &= ~UCTXIFG;
+        _send_next();
+    } while (rad_tx.cur_ind != rad_tx.end_ind && (UCB0IFG & UCTXIFG));
+    UCB0IE |= (UCTXIE | UCRXIE);
+    while (UCB0IFG & UCRXIFG);
+    P1OUT |= BIT0;
+    bc_print_crlf("Here2");
 }
 
 __interrupt_vec(PORT2_VECTOR) void port_2_isr()
@@ -166,18 +177,24 @@ __interrupt_vec(PORT2_VECTOR) void port_2_isr()
 __interrupt_vec(EUSCI_B0_VECTOR) void spi_isr()
 {
     static i8 b = 0;
-    char buff[3];
+    char      buff[3];
     switch (UCB0IV)
     {
     case (UCIV__NONE):
         break;
     case (UCIV__UCRXIFG):
         b = UCB0RXBUF;
-        itoa(b, buff, 16);
-        bc_print_crlf(buff);
+        if (scooby > 0)
+        {
+            --scooby;
+            if (!scooby)
+                P1OUT |= BIT0;
+        }
+        rb_write_byte(b, &rad_rx);
         break;
     case (UCIV__UCTXIFG):
-        _send_next();
+        if (rad_tx.cur_ind != rad_tx.end_ind)
+            _send_next();
         break;
     case (UCIV__UCSTTIFG):
         break;

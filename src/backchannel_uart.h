@@ -29,4 +29,4 @@ static void _uart_init();
 
 static void _pin_init();
 
-static void _send_next();
+static inline void _send_next();
