@@ -12,7 +12,7 @@ void node_control_init()
 
     // 105 ms seems to be needed here for reset - 150 for safeness
     // Otherwise UART gets all messed up... not sure why
-    _generate_mclk_on_pin();
+    _generate_clocks_on_pins();
 
     bc_init();
     radio_nRF24L01P_init();
@@ -40,12 +40,22 @@ void node_control_run()
 void node_control_shutdown()
 {}
 
-void _generate_mclk_on_pin()
+void _generate_clocks_on_pins()
 {
-    // Set MCLK to generate on P2.6 - this is P2SEL.x = 01 and P2DIR.x = 1
-    P2DIR |= 0x0040;
-    P2SEL1 &= ~0x0040; // Set bit 6 to zero
-    P2SEL0 |= 0x0040;  // Set bit 6 to one
+    // Set MCLK to generate on P1.4
+    P1DIR |= BIT4;
+    SYSCFG2 &= ~ADCPCTL4;
+    P1SEL0 |= BIT4;
+
+    // SMCLK on P8.0
+    P8SEL0 |= BIT0;
+    SYSCFG2 &= ~ADCPCTL8;
+    P8DIR |= BIT0;
+
+    // ACLK on P8.1
+    P8SEL0 |= BIT1;
+    SYSCFG2 &= ~ADCPCTL9;
+    P8DIR |= BIT1;
 }
 
 void _setup_clocks()
@@ -66,20 +76,19 @@ void _setup_clocks()
     __bis_SR_register(SCG0);
 
     // Select REFO as source clock
-    CSCTL3 &= ~SELREF;
+    CSCTL3 &= ~(SELREF0 | SELREF1);
     CSCTL3 |= SELREF_1;
 
     // Clear the DCO and MOD registers
     CSCTL0 = 0;
     
     // Unset all dcorsel bits, then set for 16 MHz range
-    CSCTL1 &= ~DCORSEL;
+    CSCTL1 &= ~(DCORSEL0 | DCORSEL1 | DCORSEL2);
     CSCTL1 |= DCORSEL_5;
 
     // We want FLLD at 1 (16 MHz operation) and FLLN at 487
     // This produces DCOCLK and DCOCLKDIV of (FLLN + 1)(REFO) = (487 + 1)(32768) = 15.990784 MHz
-    CSCTL2 &= ~(FLLD | FLLN);
-    CSCTL2 |= (FLLD_0 | 0x01E7);
+    CSCTL2 = (FLLD_0 | 0x01E7);
 
     // We don't need so high for SMCLK - divide by 4.. would divide by 8 but baud rate doesn't work
     CSCTL5 |= DIVS_2;
@@ -93,7 +102,7 @@ void _setup_clocks()
     __bic_SR_register(SCG0);
 
     // Poll until the FLL has reached a lock!
-    while ((CSCTL7 & FLLUNLOCK) || (CSCTL7 & DCOFFG))
+    while ((CSCTL7 & (FLLUNLOCK0 | FLLUNLOCK1)) || (CSCTL7 & DCOFFG))
     {
         // Clear OSC fault flags
         CSCTL7 &= ~DCOFFG;

@@ -38,13 +38,13 @@ void _uart_init()
 
 void _pin_init()
 {
-    // Enable UCA0TXD on pin 1.7
-    P1SEL1 &= ~BIT7; // Set bit 7 to 0
-    P1SEL0 |= BIT7;  // Set bit 7 to 1
+    // Enable UCA0TXD on pin 1.0
+    P1SEL0 |= BIT0;
+    SYSCFG2 &= ~ADCPCTL0;
 
-    // Enable UCA0RXD on pin 1.6
-    P1SEL1 &= ~BIT6; // Set bit 6 to 0
-    P1SEL0 |= BIT6;  // Set bit 6 to 1
+    // Enable UCA0RXD on pin 1.1
+    P1SEL0 |= BIT1; // Set bit 6 to 1
+    SYSCFG2 &= ~ADCPCTL1;
 }
 
 void bc_init()
@@ -75,7 +75,8 @@ void bc_print_byte(i8 byte)
 
 void _check_command()
 {
-    i8 cur_ind             = 0;
+    i8 cur_ind = 0;
+
     void (*func_ptr)(void) = 0;
     while (bc_rx.cur_ind != bc_rx.end_ind)
     {
@@ -109,14 +110,14 @@ inline void _send_next()
     UCA0TXBUF = b;
 }
 
-__interrupt_vec(EUSCI_A0_VECTOR) void uart_backchannel_ISR(void)
+__interrupt_vec(USCI_A0_VECTOR) void uart_backchannel_ISR(void)
 {
     i8 byte = 0;
     switch (UCA0IV)
     {
-    case (UCIV__NONE):
+    case (USCI_NONE):
         break;
-    case (UCIV__UCRXIFG):
+    case (USCI_UART_UCRXIFG):
         byte = UCA0RXBUF;
         rb_write_byte(byte, &bc_rx);
 
@@ -132,13 +133,13 @@ __interrupt_vec(EUSCI_A0_VECTOR) void uart_backchannel_ISR(void)
             bc_print_byte(byte);
         }
         break;
-    case (UCIV__UCTXIFG):
+    case (USCI_UART_UCTXIFG):
         if (bc_tx.cur_ind != bc_tx.end_ind)
             _send_next();
         break;
-    case (UCIV__UCSTTIFG):
+    case (USCI_UART_UCSTTIFG):
         break;
-    case (UCIV__UCTXCPTIFG):
+    case (USCI_UART_UCTXCPTIFG):
         break;
     default:
         break;

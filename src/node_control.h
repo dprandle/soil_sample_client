@@ -7,7 +7,7 @@ typedef struct {
 extern Node_Control nctrl;
 
 static void _setup_clocks();
-static void _generate_mclk_on_pin();
+static void _generate_clocks_on_pins();
 
 void node_control_init();
 void node_control_run();

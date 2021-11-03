@@ -12,20 +12,14 @@ void _spi_init()
     // Set source clock to SMCLK - other bit (UCSSEL0) is don't care
     UCB0CTLW0 |= UCSSEL1;
 
+    // Second half of clock instead of first
     UCB0CTLW0 |= UCCKPH;
-    //UCB0CTLW0 |= UCCKPL;
 
     // For this radio, its MSB first
     UCB0CTLW0 |= UCMSB;
 
     // Set as SPI master
     UCB0CTLW0 |= UCMST;
-
-    // // For this radio, slave enabled active low
-    // UCB0CTLW0 |= UCMODE_2;
-
-    // // Use STE to connect to CSN on radio - slave enable mode
-    // UCB0CTLW0 |= UCSTEM;
 
     // Set bitclock = SM clock - radio requires 0-10 Mbps (0? Thats what the datasheet says - would be interesting)
     // Doesn't specify in datasheet for MSP default values - so explicitly setting to zero
@@ -44,49 +38,50 @@ void _pins_init()
     // You must either use all P1 SPI pins, or all P2 SPI pins - you can't mix
     // Choose which ones are used by setting USSCIBRMP = 0 for P1 and USSCIBRMP = 1 for P2 in SYSCFG2 register
 
-    // Set P1.0 to CSN for Radio. Tried to use STE - it works for SPI speeds significantly less than MCLK: success of multi byte transfers become dependent
+    // Set P5.0 to CSN for Radio. Tried to use STE - it works for SPI speeds significantly less than MCLK: success of multi byte transfers become dependent
     // on how many cycles your code takes to run - this is because the TX buffer is one byte. The interrupt triggers, you add another, but all of that stuff
     // takes time and if the SPI clock is anywhere close to MCLK, the STE will go high again between multi byte transfers. Using GPIO gives straight forward
     // control. Set high initially - pull low on transmit.
-    P1DIR |= BIT0;
-    P1OUT |= BIT0;
-    // P1SEL1 &= ~BIT0;
-    // P1SEL0 |= BIT0;
+    P5DIR |= BIT0;
+    P5OUT |= BIT0;
+    LCDPCTL2 &= ~LCDS32;
+    P5SEL0 &= !BIT0;
 
-    // Set P1.1 to USB0CLK (SPI): P2SEL1.3 = 0 and P2SEL0.3 = 1
-    P1SEL1 &= ~BIT1;
-    P1SEL0 |= BIT1;
+    // Set P5.1 to USB0CLK (SPI)
+    LCDPCTL2 &= ~LCDS33;
+    P5SEL0 |= BIT1;
 
-    // Set P1.3 to USB0SOMI (SPI): P1SEL1.3 = 0 and P1SEL0.3 = 1
-    P1SEL1 &= ~BIT3;
-    P1SEL0 |= BIT3;
-    P1REN |= BIT3;
-    P1DIR &= ~BIT3;
-    P1OUT |= BIT3;
+    // Set P5.2 to USB0MOSI (SPI)
+    LCDPCTL2 &= ~LCDS34;
+    P5SEL0 |= BIT2;
 
-    // Set P1.2 to USB0SIMO (SPI): P1SEL1.2 = 0 and P1SEL0.2 = 1
-    P1SEL1 &= ~BIT2;
-    P1SEL0 |= BIT2;
+    // Set P5.3 to USB0MISO (SPI)
+    // Set a pull up resistor as the radio doesn't drive the pin very well
+    LCDPCTL2 &= ~LCDS35;
+    P5SEL0 |= BIT3;
+    P5DIR &= ~BIT3;
+    P5REN |= BIT3;
+    P5OUT |= BIT3;
 
-    // Set P2.1 to CE (output): P2SEL1.1 = 0 and P2SEL0.1 = 0 and P2DIR.1 = 1
+    // Set P1.3 to CE (output)
     // CE is active high - initialize to low
-    P2SEL1 &= ~BIT1;
-    P2SEL0 &= ~BIT1;
-    P2DIR |= BIT1;
-    P2OUT &= ~BIT1;
+    SYSCFG2 &= ~ADCPCTL3;
+    P1SEL0 &= ~BIT3;
+    P1DIR |= BIT3;
+    P1OUT &= ~BIT3;
 
-    // Set P2.0 to IRQ (input): P2SEL1.0 = 0 and P2SEL0.0 = 0 and P2DIR.0 = 0
-    // IRQ is active low - we need interrupt to trigger on falling edge - set P2IFG.0=1
-    // Enable pullup resistor - first enable with P2REN.0=1 then set as pull up with P2OUT.0=1
-    // Finally enable interrupt with P2IE.0=1, then clear the flag that all of this may have made
-    P2SEL1 &= ~BIT0;
-    P2SEL0 &= ~BIT0;
-    P2DIR &= ~BIT0;
-    P2IES |= BIT0;
-    P2REN |= BIT0;
-    P2OUT |= BIT0;
-    P2IE |= BIT0;
-    P2IFG &= ~BIT0;
+    // Set P1.6 to IRQ (input) with ADC off
+    // IRQ is active low - we need interrupt to trigger on falling edge
+    // Enable pullup resistor
+    // Finally enable interrupt, and clear the flag
+    SYSCFG2 &= ~ADCPCTL6;
+    P1SEL0 &= ~BIT6;
+    P1DIR &= ~BIT6;
+    P1IES |= BIT6;
+    P1REN |= BIT6;
+    P1OUT |= BIT6;
+    P1IE |= BIT6;
+    P1IFG &= ~BIT6;
 }
 
 void radio_nRF24L01P_init()
@@ -135,37 +130,39 @@ void radio_nRF24L01P_burst_transmit()
         _send_next();
     } while (rad_tx.cur_ind != rad_tx.end_ind && (UCB0IFG & UCTXIFG));
     UCB0IE |= (UCTXIE | UCRXIE);
-    while (UCB0IFG & UCRXIFG);
+    while (UCB0IFG & UCRXIFG)
+        ;
     P1OUT |= BIT0;
-    bc_print_crlf("Here2");
 }
 
 __interrupt_vec(PORT2_VECTOR) void port_2_isr()
 {
     switch (P2IV)
     {
-    case (P2IV__P2IFG0):
+    case (P2IV_NONE):
+        break;
+    case (P2IV_P2IFG0):
         bc_print_crlf("IRQ p2.0");
         break;
-    case (P2IV__P2IFG1):
+    case (P2IV_P2IFG1):
         //bc_uart_tx_str("IRQ P2.1!");
         break;
-    case (P2IV__P2IFG2):
+    case (P2IV_P2IFG2):
         //bc_uart_tx_str("IRQ P2.2!");
         break;
-    case (P2IV__P2IFG3):
+    case (P2IV_P2IFG3):
         //bc_uart_tx_str("IRQ P2.3!");
         break;
-    case (P2IV__P2IFG4):
+    case (P2IV_P2IFG4):
         //bc_uart_tx_str("IRQ P2.4!");
         break;
-    case (P2IV__P2IFG5):
+    case (P2IV_P2IFG5):
         //bc_uart_tx_str("IRQ P2.5!");
         break;
-    case (P2IV__P2IFG6):
+    case (P2IV_P2IFG6):
         //bc_uart_tx_str("IRQ P2.6!");
         break;
-    case (P2IV__P2IFG7):
+    case (P2IV_P2IFG7):
         //bc_uart_tx_str("IRQ P2.7!");
         break;
     default:
@@ -174,15 +171,15 @@ __interrupt_vec(PORT2_VECTOR) void port_2_isr()
     }
 }
 
-__interrupt_vec(EUSCI_B0_VECTOR) void spi_isr()
+__interrupt_vec(USCI_B0_VECTOR) void spi_isr()
 {
     static i8 b = 0;
     char      buff[3];
     switch (UCB0IV)
     {
-    case (UCIV__NONE):
+    case (USCI_NONE):
         break;
-    case (UCIV__UCRXIFG):
+    case (USCI_SPI_UCRXIFG):
         b = UCB0RXBUF;
         if (scooby > 0)
         {
@@ -192,13 +189,9 @@ __interrupt_vec(EUSCI_B0_VECTOR) void spi_isr()
         }
         rb_write_byte(b, &rad_rx);
         break;
-    case (UCIV__UCTXIFG):
+    case (USCI_SPI_UCTXIFG):
         if (rad_tx.cur_ind != rad_tx.end_ind)
             _send_next();
-        break;
-    case (UCIV__UCSTTIFG):
-        break;
-    case (UCIV__UCTXCPTIFG):
         break;
     default:
         break;
