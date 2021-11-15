@@ -29,6 +29,12 @@ void node_control_run()
             CHECK_FOR_COMMAND_FUNC();
             CHECK_FOR_COMMAND_FUNC = 0;
         }
+        
+        if (HANDLE_RADIO_RX_COMMAND)
+        {
+            HANDLE_RADIO_RX_COMMAND();
+            HANDLE_RADIO_RX_COMMAND = 0;
+        }
 
         bc_print_crlf("Entering LPM4");
         LPM4;

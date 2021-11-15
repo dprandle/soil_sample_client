@@ -1,11 +1,12 @@
 #include <msp430.h>
+#include <stdlib.h>
 
 #include "radio_nrf24l01p.h"
 #include "backchannel_uart.h"
 
 void (*CHECK_FOR_COMMAND_FUNC)(void)       = 0;
-char COMMANDS[COMMAND_COUNT][COMMAND_SIZE] = {{'C', 'F'}};
-void (*COMMAND_FUNC[COMMAND_COUNT])(void)  = {_radio_write};
+char COMMANDS[COMMAND_COUNT][COMMAND_SIZE] = {{'c', 'f'}, {'r', 'x'}, {'t', 'x'}};
+void (*COMMAND_FUNC[COMMAND_COUNT])(void)  = {_radio_write, _RX_MODE, _TX_MODE};
 
 Ring_Buffer bc_tx = {};
 Ring_Buffer bc_rx = {};
@@ -17,12 +18,12 @@ void _radio_write()
 
 void _TX_MODE()
 {
-
+    bc_print("TX_MODE\r\n");
 }
 
 void _RX_MODE()
 {
-
+    bc_print("RX_MODE\r\n");
 }
 
 void _uart_init()
@@ -76,7 +77,16 @@ void bc_print(const char * str)
         _send_next();
 }
 
-void bc_print_byte(i8 byte)
+void bc_print_byte(i8 byte, i8 base)
+{
+    i8 buf[8];
+    itoa(byte, buf, base);
+    i8 cnt = rb_write_str(buf, &bc_tx);
+    if (cnt == rb_bytes_available(&bc_tx))
+        _send_next();
+}
+
+void bc_print_raw(i8 byte)
 {
     rb_write(&byte, 1, &bc_tx);
     if (rb_bytes_available(&bc_tx) == 1)
@@ -87,26 +97,36 @@ void _check_command()
 {
     i8 cur_ind = 0;
 
-    void (*func_ptr)(void) = 0;
+    i8 running_mask = -1;
     while (bc_rx.cur_ind != bc_rx.end_ind)
     {
+        if (bc_rx.data[bc_rx.cur_ind] == '\n' || bc_rx.data[bc_rx.cur_ind] == '\r')
+        {
+            bc_rx.cur_ind = bc_rx.end_ind;
+            break;
+        }
+
+        i8 cur_mask = 0;
         for (i8 i = 0; i < COMMAND_COUNT; ++i)
         {
             if (COMMANDS[i][cur_ind] == bc_rx.data[bc_rx.cur_ind])
-                func_ptr = COMMAND_FUNC[i];
+                cur_mask |= 1 << i;
         }
+
+        running_mask &= cur_mask;
 
         ++cur_ind;
         ++bc_rx.cur_ind;
         if (bc_rx.cur_ind == RING_BUFFER_SIZE)
             bc_rx.cur_ind = 0;
+    }
 
-        if (cur_ind == COMMAND_SIZE || !func_ptr)
-        {
-            bc_rx.cur_ind = bc_rx.end_ind;
-            if (func_ptr)
-                func_ptr();
-        }
+    if (running_mask > 0)
+    {
+        cur_ind = 0;
+        while ((running_mask >> cur_ind) > 1)
+            ++cur_ind;
+        COMMAND_FUNC[cur_ind]();
     }
 }
 
@@ -140,7 +160,7 @@ __interrupt_vec(USCI_A0_VECTOR) void uart_backchannel_ISR(void)
         }
         else
         {
-            bc_print_byte(byte);
+            bc_print_raw(byte);
         }
         break;
     case (USCI_UART_UCTXIFG):
