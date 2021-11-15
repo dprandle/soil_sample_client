@@ -15,6 +15,16 @@ void _radio_write()
     radio_nRF24L01P_read_register(EN_AA);
 }
 
+void _TX_MODE()
+{
+
+}
+
+void _RX_MODE()
+{
+
+}
+
 void _uart_init()
 {
     // Set source clock to SMCLCK

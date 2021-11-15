@@ -88,6 +88,9 @@ void radio_nRF24L01P_init()
 {
     _pins_init();
     _spi_init();
+
+    // Just for now - power up radio
+
 }
 
 void radio_nRF24L01P_read_register(i8 regaddr)
@@ -98,7 +101,7 @@ void radio_nRF24L01P_read_register(i8 regaddr)
     rb_write(cmdword, 33, &rad_tx);
     if (rb_bytes_available(&rad_tx) == 33)
     {
-        radio_nRF24L01P_burst_transmit();
+        radio_nRF24L01P_burst_spi_tx();
         // scooby = 8;
         // P1OUT &= ~BIT0;
         // _send_next();
@@ -118,20 +121,34 @@ inline void _send_next()
     UCB0TXBUF = b;
 }
 
-void radio_nRF24L01P_burst_transmit()
+void radio_nRF24L01P_burst_spi_tx()
 {
-    // Enable TX and RX interrupts
     bc_print_crlf("Here");
+
+    // Disable TX and RX interrupts
     UCB0IE &= ~(UCTXIE | UCRXIE);
+
+    // Set CSN to enable radio
     P1OUT &= ~BIT0;
+    
+    // While TX IFG is set and there is still data to send in the ring buffer, clear the TX interrupt flag
+    // and send the next byte. Once no more data, this will end.
     do
     {
-        UCB0IFG &= ~UCTXIFG;
+        // Clear both TX and RX flags
+        UCB0IFG &= ~(UCTXIFG | UCRXIFG);
         _send_next();
     } while (rad_tx.cur_ind != rad_tx.end_ind && (UCB0IFG & UCTXIFG));
+
+    // Re-enable the interrupt flags, first clearing the TX flag - want to run the RX ISR so don't clear it
+    UCB0IFG &= ~UCTXIFG;    
     UCB0IE |= (UCTXIE | UCRXIE);
-    while (UCB0IFG & UCRXIFG)
-        ;
+
+    // Wait until the last byte is done sending before changing CSN back. Essentially wait until the RX interrupt is run
+    // before putting the CSN back.
+    while (UCB0IFG & UCRXIFG);
+
+    // Set CSN again to indicate we are done
     P1OUT |= BIT0;
 }
 
@@ -188,10 +205,12 @@ __interrupt_vec(USCI_B0_VECTOR) void spi_isr()
                 P1OUT |= BIT0;
         }
         rb_write_byte(b, &rad_rx);
+        bc_print("RX");
         break;
     case (USCI_SPI_UCTXIFG):
         if (rad_tx.cur_ind != rad_tx.end_ind)
             _send_next();
+        bc_print("TX");
         break;
     default:
         break;

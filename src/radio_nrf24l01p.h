@@ -185,7 +185,9 @@ extern Ring_Buffer rad_rx;
 
 void radio_nRF24L01P_init();
 
-void radio_nRF24L01P_burst_transmit();
+/// Transmit all data pending in rad_tx as fast as possible, ignoring
+/// all RX bytes shifted back
+void radio_nRF24L01P_burst_spi_tx();
 
 void radio_nRF24L01P_read_register(i8 regaddr);
 
