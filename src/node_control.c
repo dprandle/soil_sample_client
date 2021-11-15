@@ -29,9 +29,10 @@ void node_control_run()
             CHECK_FOR_COMMAND_FUNC();
             CHECK_FOR_COMMAND_FUNC = 0;
         }
-        
+
         if (HANDLE_RADIO_RX_COMMAND)
         {
+            bc_print_crlf("Handling...");
             HANDLE_RADIO_RX_COMMAND();
             HANDLE_RADIO_RX_COMMAND = 0;
         }

@@ -5,15 +5,17 @@
 #include "backchannel_uart.h"
 
 void (*CHECK_FOR_COMMAND_FUNC)(void)       = 0;
-char COMMANDS[COMMAND_COUNT][COMMAND_SIZE] = {{'c', 'f'}, {'r', 'x'}, {'t', 'x'}};
-void (*COMMAND_FUNC[COMMAND_COUNT])(void)  = {_radio_write, _RX_MODE, _TX_MODE};
+char COMMANDS[COMMAND_COUNT][COMMAND_SIZE] = {{'c', 'f'}, {'r', 'x'}, {'t', 'x'}, {'p','u'}, {'p','d'}};
+void (*COMMAND_FUNC[COMMAND_COUNT])(void)  = {_radio_get_config, _RX_MODE, _TX_MODE, _radio_power_up, _radio_power_down};
 
 Ring_Buffer bc_tx = {};
 Ring_Buffer bc_rx = {};
 
-void _radio_write()
+void _radio_get_config()
 {
-    radio_nRF24L01P_read_register(EN_AA);
+    bc_print("Getting radio config");
+    radio_nRF24L01P_read_register(NRF24L01P_ADDR_CONFIG);
+    __delay_cycles(10000);
 }
 
 void _TX_MODE()
@@ -24,6 +26,18 @@ void _TX_MODE()
 void _RX_MODE()
 {
     bc_print("RX_MODE\r\n");
+}
+
+void _radio_power_up()
+{
+    bc_print("Power Up");
+    radio_nRF24L01P_write_register(NRF24L01P_ADDR_CONFIG, NRF24L01P_PWR_UP | NRF24L01P_EN_CRC);
+}
+
+void _radio_power_down()
+{
+    bc_print("Power Down");
+    radio_nRF24L01P_write_register(NRF24L01P_ADDR_CONFIG, NRF24L01P_EN_CRC);
 }
 
 void _uart_init()

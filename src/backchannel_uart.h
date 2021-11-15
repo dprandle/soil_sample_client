@@ -4,7 +4,7 @@
 #include "ring_buffer.h"
 
 #define COMMAND_SIZE 2
-#define COMMAND_COUNT 3
+#define COMMAND_COUNT 5
 
 extern Ring_Buffer bc_tx;
 extern Ring_Buffer bc_rx;
@@ -23,11 +23,15 @@ void bc_print_byte(i8 byte, i8 base);
 
 void bc_print_raw(i8 byte);
 
-static void _radio_write();
+static void _radio_get_config();
 
 static void _TX_MODE();
 
 static void _RX_MODE();
+
+static void _radio_power_up();
+
+static void _radio_power_down();
 
 static void _check_command();
 

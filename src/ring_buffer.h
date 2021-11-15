@@ -1,7 +1,7 @@
 #pragma once
 #include "typedefs.h"
 
-#define RING_BUFFER_SIZE 64
+#define RING_BUFFER_SIZE 128
 
 typedef struct
 {

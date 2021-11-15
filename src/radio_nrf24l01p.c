@@ -6,10 +6,9 @@
 Ring_Buffer rad_tx = {};
 Ring_Buffer rad_rx = {};
 
-static i8 current_command             = -1;
-static i8 command_register            = -1;
-static i8 response_bytes_received     = 0;
-static i8 response_bytes_expected     = 0;
+static i8 current_command = -1;
+static i8 response_bytes_received = 0;
+static i8 response_bytes_expected = 0;
 void (*HANDLE_RADIO_RX_COMMAND)(void) = 0;
 
 void _spi_init()
@@ -35,7 +34,7 @@ void _spi_init()
 
     // Enable TX and RX interrupts, then clear the interrupt flags
     UCB0IE |= (UCTXIE | UCRXIE);
-    UCB0IFG &= ~(UCTXIFG | UCRXIFG);
+    UCB0IFG &= ~(UCTXIFG);// | UCRXIFG);
 }
 
 void _pins_init()
@@ -50,7 +49,7 @@ void _pins_init()
     P5DIR |= BIT0;
     P5OUT |= BIT0;
     LCDPCTL2 &= ~LCDS32;
-    P5SEL0 &= !BIT0;
+    P5SEL0 &= ~BIT0;
 
     // Set P5.1 to USB0CLK (SPI)
     LCDPCTL2 &= ~LCDS33;
@@ -97,34 +96,68 @@ void radio_nRF24L01P_init()
     // Just for now - power up radio
 }
 
-void radio_nRF24L01P_write_register(i8 regaddr, i8 * data, i8 size)
+void radio_nRF24L01P_write_register(i8 regaddr, i8 byte)
 {
-    static i8 cmd_write = W_REGISTER;
-    rb_write(&cmd_write, 1, &rad_tx);
+    rb_write_byte(NRF24L01P_CMD_W_REGISTER | regaddr, &rad_tx);
+    rb_write_byte(byte, &rad_tx);
+    if (rb_bytes_available(&rad_tx) == 2)
+    {
+        current_command = NRF24L01P_CMD_W_REGISTER | regaddr;
+        response_bytes_received = 0;
+        response_bytes_expected = 2;
+        P5OUT &= ~BIT0;
+        _send_next();
+    }
+}
+
+void radio_nRF24L01P_write_register_data(i8 regaddr, i8 * data, i8 size)
+{
+    rb_write_byte(NRF24L01P_CMD_W_REGISTER | regaddr, &rad_tx);
     rb_write(data, size, &rad_tx);
     if (rb_bytes_available(&rad_tx) == size + 1)
     {
-        command_register        = regaddr;
-        current_command         = cmd_write;
+        current_command = NRF24L01P_CMD_W_REGISTER | regaddr;
         response_bytes_received = 0;
         response_bytes_expected = size + 1;
-        P1OUT &= ~BIT0;
+        P5OUT &= ~BIT0;
         _send_next();
     }
 }
 
 void radio_nRF24L01P_read_register(i8 regaddr)
 {
-    static i8 cmdword[] = {W_TX_PAYLOAD, 0x55, 0X55, 0X55, 0X55, 0X55, 0X55, 0X55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55,
-                           0x55,         0X55, 0X55, 0X55, 0X55, 0X55, 0X55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55};
-    //cmdword[0] = regaddr;
-    rb_write(cmdword, 33, &rad_tx);
-    if (rb_bytes_available(&rad_tx) == 33)
+    rb_write_byte(NRF24L01P_CMD_R_REGISTER | regaddr, &rad_tx);
+    rb_write_byte(NRF24L01P_CMD_NOP, &rad_tx);
+    rb_write_byte(NRF24L01P_CMD_NOP, &rad_tx);
+    rb_write_byte(NRF24L01P_CMD_NOP, &rad_tx);
+    rb_write_byte(NRF24L01P_CMD_NOP, &rad_tx);
+    rb_write_byte(NRF24L01P_CMD_NOP, &rad_tx);
+    rb_write_byte(NRF24L01P_CMD_NOP, &rad_tx);
+    rb_write_byte(NRF24L01P_CMD_NOP, &rad_tx);
+    rb_write_byte(NRF24L01P_CMD_NOP, &rad_tx);
+    if (rb_bytes_available(&rad_tx) == 9)
     {
-        radio_nRF24L01P_burst_spi_tx();
-        // scooby = 8;
-        // P1OUT &= ~BIT0;
-        // _send_next();
+        current_command = NRF24L01P_CMD_R_REGISTER | regaddr;
+        response_bytes_received = 0;
+        response_bytes_expected = 9;
+        P5OUT &= ~BIT0;
+        _send_next();
+    }
+}
+
+void radio_nRF24L01P_read_register_data(i8 regaddr, i8 nbytes)
+{
+    rb_write_byte(NRF24L01P_CMD_R_REGISTER | regaddr, &rad_tx);
+    for (int i = 0; i < nbytes; ++i)
+        rb_write_byte(NRF24L01P_CMD_NOP, &rad_tx);
+    
+    if (rb_bytes_available(&rad_tx) == nbytes + 1)
+    {
+        current_command = NRF24L01P_CMD_R_REGISTER | regaddr;
+        response_bytes_received = 0;
+        response_bytes_expected = nbytes + 1;
+        P5OUT &= ~BIT0;
+        _send_next();
     }
 }
 
@@ -134,11 +167,13 @@ void radio_nRF24L01P_rx_byte(i8 byte)
 inline void _send_next()
 {
     static i8 b = 0;
-    b           = rad_tx.data[rad_tx.cur_ind];
+    b = rad_tx.data[rad_tx.cur_ind];
     ++rad_tx.cur_ind;
     if (rad_tx.cur_ind == RING_BUFFER_SIZE)
         rad_tx.cur_ind = 0;
     UCB0TXBUF = b;
+    bc_print("tx");
+    bc_print_byte(b,16);
 }
 
 void radio_nRF24L01P_burst_spi_tx()
@@ -149,7 +184,7 @@ void radio_nRF24L01P_burst_spi_tx()
     UCB0IE &= ~(UCTXIE | UCRXIE);
 
     // Set CSN to enable radio
-    P1OUT &= ~BIT0;
+    P5OUT &= ~BIT0;
 
     // While TX IFG is set and there is still data to send in the ring buffer, clear the TX interrupt flag
     // and send the next byte. Once no more data, this will end.
@@ -172,7 +207,7 @@ void radio_nRF24L01P_burst_spi_tx()
         ;
 
     // Set CSN again to indicate we are done
-    P1OUT |= BIT0;
+    P5OUT |= BIT0;
 }
 
 __interrupt_vec(PORT2_VECTOR) void port_2_isr()
@@ -213,7 +248,7 @@ __interrupt_vec(PORT2_VECTOR) void port_2_isr()
 
 void _check_rx_radio()
 {
-    bc_print("Doing something..\n\r");
+    bc_print("Doing Smthn..\n\r");
     while (rad_rx.cur_ind != rad_rx.end_ind)
     {
         ++rad_rx.cur_ind;
@@ -232,33 +267,30 @@ __interrupt_vec(USCI_B0_VECTOR) void spi_isr()
         break;
     case (USCI_SPI_UCRXIFG):
         b = UCB0RXBUF;
-
+        bc_print_byte(b,16);
         if (response_bytes_expected != 0)
         {
             ++response_bytes_received;
-            if (response_bytes_received == 1)
-            {
-                bc_print("\nStatus:");
-                bc_print_byte(b, 16);
-            }
-            rb_write_byte(b, &rad_rx);
+            //rb_write_byte(b, &rad_rx);
 
-            if (response_bytes_received == response_bytes_expected)
+            if (response_bytes_received == response_bytes_expected-1)
             {
-                P1OUT |= BIT0;
+                P5OUT |= BIT0;
                 HANDLE_RADIO_RX_COMMAND = _check_rx_radio;
                 LPM4_EXIT;
             }
         }
-        else if (response_bytes_received > 0)
-        {
-            bc_print("UH OH!");
-            response_bytes_received = 0;
-        }
+        // else if (response_bytes_received > 0)
+        // {
+        //     bc_print("UH OH!");
+        //     response_bytes_received = 0;
+        // }
         break;
     case (USCI_SPI_UCTXIFG):
         if (rad_tx.cur_ind != rad_tx.end_ind)
+        {
             _send_next();
+        }
         break;
     default:
         break;
