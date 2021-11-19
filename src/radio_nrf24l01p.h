@@ -42,6 +42,7 @@
 #define NRF24L01P_ADDR_RX_PW_P5    0x16
 #define NRF24L01P_ADDR_FIFO_STATUS 0x17
 #define NRF24L01P_ADDR_DYNPD       0x1C
+#define NRF24L01P_ADDR_FEATURE     0x1D
 
 // CONFIG register fields
 #define NRF24L01P_MASK_RX_DR_SHIFT  6
@@ -179,6 +180,10 @@
 #define NRF24L01P_DPL_P1       0x02
 #define NRF24L01P_DPL_P0_SHIFT 0
 #define NRF24L01P_DPL_P0       0x01
+
+#define NRF24L01P_FEATURE_EN_DPL     0x04
+#define NRF24L01P_FEATURE_EN_ACK_PAY 0x02
+#define NRF24L01P_FEATURE_EN_DYN_ACK 0x01
 
 extern Ring_Buffer rad_tx;
 extern Ring_Buffer rad_rx;

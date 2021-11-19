@@ -230,10 +230,12 @@ void _check_rx_radio()
 {
     while (rad_rx.cur_ind != rad_rx.end_ind)
     {
+        bc_print_byte(rad_rx.data[rad_rx.cur_ind],16);
         ++rad_rx.cur_ind;
         if (rad_rx.cur_ind == RING_BUFFER_SIZE)
             rad_rx.cur_ind = 0;
     }
+    bc_print("\r\n");
 }
 
 __interrupt_vec(USCI_B0_VECTOR) void spi_isr()

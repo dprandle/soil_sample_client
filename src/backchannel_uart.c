@@ -4,50 +4,255 @@
 #include "radio_nrf24l01p.h"
 #include "backchannel_uart.h"
 
-void (*CHECK_FOR_COMMAND_FUNC)(void)       = 0;
-char COMMANDS[COMMAND_COUNT][COMMAND_SIZE] = {{'c', 'f'}, {'r', 'x'}, {'t', 'x'}, {'p','d'}, {'c','h'}};
-void (*COMMAND_FUNC[COMMAND_COUNT])(void)  = {_radio_get_config, _radio_power_up_rx, _radio_power_up_tx, _radio_power_down, _radio_get_freq_channel};
+void (*CHECK_FOR_COMMAND_FUNC)(void) = 0;
+char COMMANDS[COMMAND_COUNT][COMMAND_SIZE] = {
+    {'C', 'I'}, 
+    {'R', 'X'}, 
+    {'T', 'X'}, 
+    {'c', 'f'}, 
+    {'C', 'H'},
+    {'c', 'h'}, 
+    {'R', 'F'}, 
+    {'C', 'W'}, 
+    {'r', 'f'}, 
+    {'R', 'T'}, 
+    {'r', 't'}, 
+    {'A', 'W'}, 
+    {'a', 'w'}, 
+    {'P', 'E'}, 
+    {'p', 'e'}, 
+    {'R', 'A'}, 
+    {'r', 'a'}, 
+    {'T', 'A'}, 
+    {'t', 'a'}, 
+    {'A', 'A'}, 
+    {'a', 'a'}, 
+    {'D', 'P'}, 
+    {'d', 'p'}, 
+    {'F', 'T'}, 
+    {'f', 't'}, 
+    {'f', 'i'}, 
+    {'p', 's'}, 
+    {'r', 'p'}};
+
+void (*COMMAND_FUNC[COMMAND_COUNT])(void) = {
+    _radio_clear_interrupts, 
+    _radio_set_config_power_up_rx, 
+    _radio_set_config_power_up_tx, 
+    _radio_get_config,
+    _radio_set_freq_channel,
+    _radio_get_freq_channel,
+    _radio_set_rf_setup_normal,
+    _radio_set_rf_setup_carrier,
+    _radio_get_rf_setup,
+    _radio_set_retransmission,
+    _radio_get_retransmission,
+    _radio_set_address_width,
+    _radio_get_address_width,
+    _radio_set_rx_pipe_enable,
+    _radio_get_rx_pipe_enable,
+    _radio_set_rx_pipe_0_address,
+    _radio_get_rx_pipe_0_address,
+    _radio_set_tx_address,
+    _radio_get_tx_address,
+    _radio_set_auto_ack,
+    _radio_get_auto_ack,
+    _radio_set_pipe_dynamic_payload,
+    _radio_get_pipe_dynamic_payload,
+    _radio_set_features,
+    _radio_get_features,
+    _radio_get_fifo_status,
+    _radio_get_packet_stats, 
+    _radio_get_rx_power};
 
 Ring_Buffer bc_tx = {};
 Ring_Buffer bc_rx = {};
-int TX_MODE = 0;
+int         TX_MODE = 0;
+
+void _radio_clear_interrupts()
+{
+    bc_print_crlf("ClearInts");
+    radio_nRF24L01P_write_register(NRF24L01P_ADDR_STATUS, NRF24L01P_RX_DR | NRF24L01P_TX_DS | NRF24L01P_MAX_RT);
+}
+
+
+void _radio_set_config_power_up_rx()
+{
+    bc_print_crlf("RX Mode");
+    radio_nRF24L01P_write_register(NRF24L01P_ADDR_CONFIG, NRF24L01P_EN_CRC | NRF24L01P_PWR_UP | NRF24L01P_PRIM_RX);
+    P1OUT |= BIT3;
+}
+
+void _radio_set_config_power_up_tx()
+{
+    TX_MODE = 1;
+    bc_print_crlf("TX Mode");
+    radio_nRF24L01P_write_register(NRF24L01P_ADDR_CONFIG, NRF24L01P_EN_CRC | NRF24L01P_PWR_UP);
+}
 
 void _radio_get_config()
 {
     bc_print_crlf("Get CFG");
     radio_nRF24L01P_read_register(NRF24L01P_ADDR_CONFIG, 1);
-    //__delay_cycles(10000);
+}
+
+
+void _radio_set_freq_channel()
+{
+    bc_print_crlf("Set CH");
+    radio_nRF24L01P_write_register(NRF24L01P_ADDR_RF_CH, 101);
 }
 
 void _radio_get_freq_channel()
 {
-    bc_print_crlf("RF CH");
+    bc_print_crlf("Get CH");
     radio_nRF24L01P_read_register(NRF24L01P_ADDR_RF_CH, 1);
-    //__delay_cycles(10000);
 }
 
-void _radio_power_up_rx()
+
+void _radio_set_rf_setup_normal()
 {
-    bc_print_crlf("PU RX");
-    radio_nRF24L01P_write_register(NRF24L01P_ADDR_CONFIG, NRF24L01P_EN_CRC | NRF24L01P_PWR_UP | NRF24L01P_PRIM_RX);
+    bc_print_crlf("Setup RF");
+    radio_nRF24L01P_write_register(NRF24L01P_ADDR_RF_SETUP, NRF24L01P_RF_DR_LOW | NRF24L01P_RF_PWR_0);
+}
+
+void _radio_set_rf_setup_carrier()
+{
+    bc_print_crlf("CW");
+    radio_nRF24L01P_write_register(NRF24L01P_ADDR_RF_SETUP, NRF24L01P_CONT_WAVE | NRF24L01P_PLL_LOCK | NRF24L01P_RF_DR_LOW | NRF24L01P_RF_PWR_0);
     P1OUT |= BIT3;
 }
 
-void _radio_power_up_tx()
+void _radio_get_rf_setup()
 {
-    TX_MODE = 1;
-    bc_print_crlf("PU TX");
-    P1OUT &= ~BIT3;
-    radio_nRF24L01P_write_register(NRF24L01P_ADDR_CONFIG, NRF24L01P_EN_CRC | NRF24L01P_PWR_UP);
+    bc_print_crlf("Get RF");
+    radio_nRF24L01P_read_register(NRF24L01P_ADDR_RF_SETUP, 1);
 }
 
 
-void _radio_power_down()
+void _radio_set_retransmission()
 {
-    bc_print_crlf("PD");
-    P1OUT &= ~BIT3;
-    radio_nRF24L01P_write_register(NRF24L01P_ADDR_CONFIG, NRF24L01P_EN_CRC);
+    bc_print_crlf("Set ARETR");
+    radio_nRF24L01P_write_register(NRF24L01P_ADDR_SETUP_RETR, NRF24L01P_ARD_500 | 10);
 }
+
+void _radio_get_retransmission()
+{
+    bc_print_crlf("Get ARETR");
+    radio_nRF24L01P_read_register(NRF24L01P_ADDR_SETUP_RETR, 1);
+}
+
+
+void _radio_set_address_width()
+{
+    bc_print_crlf("Set AddrW");
+    radio_nRF24L01P_write_register(NRF24L01P_ADDR_SETUP_RETR, NRF24L01P_AW_3);
+}
+
+void _radio_get_address_width()
+{
+    bc_print_crlf("Get AddrW");
+    radio_nRF24L01P_read_register(NRF24L01P_ADDR_SETUP_RETR, 1);
+}
+
+
+void _radio_set_rx_pipe_enable()
+{
+    bc_print_crlf("Set PipeEn");
+    radio_nRF24L01P_write_register(NRF24L01P_ADDR_EN_RXADDR, NRF24L01P_ERX_P0);
+}
+
+void _radio_get_rx_pipe_enable()
+{
+    bc_print_crlf("Get PipeEn");
+    radio_nRF24L01P_read_register(NRF24L01P_ADDR_EN_RXADDR, 1);
+}
+
+
+void _radio_set_rx_pipe_0_address()
+{
+    bc_print_crlf("Set P0 Addr");
+    radio_nRF24L01P_write_register_data(NRF24L01P_ADDR_RX_ADDR_P0, "node1", 5);
+}
+
+void _radio_get_rx_pipe_0_address()
+{
+    bc_print_crlf("Get P0 Addr");
+    radio_nRF24L01P_read_register(NRF24L01P_ADDR_RX_ADDR_P0, 5);
+}
+
+
+void _radio_set_tx_address()
+{
+    bc_print_crlf("Set TX Addr");
+    radio_nRF24L01P_write_register_data(NRF24L01P_ADDR_TX_ADDR, "node1", 5);
+}
+
+void _radio_get_tx_address()
+{
+    bc_print_crlf("Get TX Addr");
+    radio_nRF24L01P_read_register(NRF24L01P_ADDR_TX_ADDR, 5);
+}
+
+
+void _radio_set_auto_ack()
+{
+    bc_print_crlf("Set AA");
+    radio_nRF24L01P_write_register(NRF24L01P_ADDR_EN_AA, NRF24L01P_ENAA_P0);
+}
+
+void _radio_get_auto_ack()
+{
+    bc_print_crlf("Get AA");
+    radio_nRF24L01P_read_register(NRF24L01P_ADDR_EN_AA, 1);
+}
+
+
+void _radio_set_pipe_dynamic_payload()
+{
+    bc_print_crlf("Set DynP");
+    radio_nRF24L01P_write_register(NRF24L01P_ADDR_DYNPD, 0);
+}
+
+void _radio_get_pipe_dynamic_payload()
+{
+    bc_print_crlf("Get DynP");
+    radio_nRF24L01P_read_register(NRF24L01P_ADDR_DYNPD, 1);
+}
+
+
+void _radio_set_features()
+{
+    bc_print_crlf("Set Feat");
+    radio_nRF24L01P_write_register(NRF24L01P_ADDR_FEATURE, 0);
+}
+
+void _radio_get_features()
+{
+    bc_print_crlf("Get Feat");
+    radio_nRF24L01P_read_register(NRF24L01P_ADDR_FEATURE, 1);
+}
+
+
+void _radio_get_fifo_status()
+{
+    bc_print_crlf("Get FIFO_St");
+    radio_nRF24L01P_read_register(NRF24L01P_ADDR_FIFO_STATUS, 1);
+}
+
+void _radio_get_packet_stats()
+{
+    bc_print_crlf("Get PcktSts");
+    radio_nRF24L01P_read_register(NRF24L01P_ADDR_OBSERVE_TX, 1);
+}
+
+void _radio_get_rx_power()
+{
+    bc_print_crlf("Get RxPwr");
+    radio_nRF24L01P_read_register(NRF24L01P_ADDR_RPD, 1);
+}
+
+
 
 void _uart_init()
 {
@@ -122,7 +327,7 @@ void _check_command()
     i8 data_cnt = rb_bytes_available(&bc_rx);
     i8 start_ind = bc_rx.cur_ind;
 
-    i8 running_mask = -1;
+    i64 running_mask = -1;
     while (bc_rx.cur_ind != bc_rx.end_ind)
     {
         if (bc_rx.data[bc_rx.cur_ind] == '\n' || bc_rx.data[bc_rx.cur_ind] == '\r')
@@ -131,7 +336,7 @@ void _check_command()
             break;
         }
 
-        i8 cur_mask = 0;
+        i64 cur_mask = 0;
         for (i8 i = 0; i < COMMAND_COUNT; ++i)
         {
             if (COMMANDS[i][cur_ind] == bc_rx.data[bc_rx.cur_ind])
@@ -146,12 +351,14 @@ void _check_command()
             bc_rx.cur_ind = 0;
     }
 
-    if (running_mask > 0 && running_mask < 128)
+    if (running_mask > 0 && running_mask != -1)
     {
         TX_MODE = 0;
         cur_ind = 0;
         while ((running_mask >> cur_ind) > 1)
             ++cur_ind;
+        
+        P1OUT &= ~BIT3;
         COMMAND_FUNC[cur_ind]();
     }
     else if (TX_MODE)
@@ -166,15 +373,15 @@ void _check_command()
         }
         radio_nRF24L01P_burst_spi_tx();
         P1OUT |= BIT3;
-        //__delay_cycles(200);
-        //P1OUT &= ~BIT3;
+        __delay_cycles(200);
+        P1OUT &= ~BIT3;
     }
 }
 
 inline void _send_next()
 {
     static i8 b = 0;
-    b           = bc_tx.data[bc_tx.cur_ind];
+    b = bc_tx.data[bc_tx.cur_ind];
     ++bc_tx.cur_ind;
     if (bc_tx.cur_ind == RING_BUFFER_SIZE)
         bc_tx.cur_ind = 0;
