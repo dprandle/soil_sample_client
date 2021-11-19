@@ -340,7 +340,7 @@ void _check_command()
         for (i8 i = 0; i < COMMAND_COUNT; ++i)
         {
             if (COMMANDS[i][cur_ind] == bc_rx.data[bc_rx.cur_ind])
-                cur_mask |= 1 << i;
+                cur_mask |= ((i64)1) << i;
         }
 
         running_mask &= cur_mask;
