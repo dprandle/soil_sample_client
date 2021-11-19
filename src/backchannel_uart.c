@@ -78,6 +78,7 @@ void _radio_clear_interrupts()
 
 void _radio_set_config_power_up_rx()
 {
+    P1OUT &= ~BIT3;
     bc_print_crlf("RX Mode");
     radio_nRF24L01P_write_register(NRF24L01P_ADDR_CONFIG, NRF24L01P_EN_CRC | NRF24L01P_PWR_UP | NRF24L01P_PRIM_RX);
     P1OUT |= BIT3;
@@ -85,6 +86,7 @@ void _radio_set_config_power_up_rx()
 
 void _radio_set_config_power_up_tx()
 {
+    P1OUT &= ~BIT3;
     TX_MODE = 1;
     bc_print_crlf("TX Mode");
     radio_nRF24L01P_write_register(NRF24L01P_ADDR_CONFIG, NRF24L01P_EN_CRC | NRF24L01P_PWR_UP);
@@ -99,6 +101,7 @@ void _radio_get_config()
 
 void _radio_set_freq_channel()
 {
+    P1OUT &= ~BIT3;
     bc_print_crlf("Set CH");
     radio_nRF24L01P_write_register(NRF24L01P_ADDR_RF_CH, 101);
 }
@@ -112,14 +115,16 @@ void _radio_get_freq_channel()
 
 void _radio_set_rf_setup_normal()
 {
+    P1OUT &= ~BIT3;
     bc_print_crlf("Setup RF");
-    radio_nRF24L01P_write_register(NRF24L01P_ADDR_RF_SETUP, NRF24L01P_RF_DR_LOW | NRF24L01P_RF_PWR_0);
+    radio_nRF24L01P_write_register(NRF24L01P_ADDR_RF_SETUP, NRF24L01P_RF_PWR_3);
 }
 
 void _radio_set_rf_setup_carrier()
 {
+    P1OUT &= ~BIT3;
     bc_print_crlf("CW");
-    radio_nRF24L01P_write_register(NRF24L01P_ADDR_RF_SETUP, NRF24L01P_CONT_WAVE | NRF24L01P_PLL_LOCK | NRF24L01P_RF_DR_LOW | NRF24L01P_RF_PWR_0);
+    radio_nRF24L01P_write_register(NRF24L01P_ADDR_RF_SETUP, NRF24L01P_CONT_WAVE | NRF24L01P_PLL_LOCK | NRF24L01P_RF_PWR_3);
     P1OUT |= BIT3;
 }
 
@@ -145,6 +150,7 @@ void _radio_get_retransmission()
 
 void _radio_set_address_width()
 {
+    P1OUT &= ~BIT3;
     bc_print_crlf("Set AddrW");
     radio_nRF24L01P_write_register(NRF24L01P_ADDR_SETUP_RETR, NRF24L01P_AW_3);
 }
@@ -158,6 +164,7 @@ void _radio_get_address_width()
 
 void _radio_set_rx_pipe_enable()
 {
+    P1OUT &= ~BIT3;
     bc_print_crlf("Set PipeEn");
     radio_nRF24L01P_write_register(NRF24L01P_ADDR_EN_RXADDR, NRF24L01P_ERX_P0);
 }
@@ -171,6 +178,7 @@ void _radio_get_rx_pipe_enable()
 
 void _radio_set_rx_pipe_0_address()
 {
+    P1OUT &= ~BIT3;
     bc_print_crlf("Set P0 Addr");
     radio_nRF24L01P_write_register_data(NRF24L01P_ADDR_RX_ADDR_P0, "node1", 5);
 }
@@ -184,6 +192,7 @@ void _radio_get_rx_pipe_0_address()
 
 void _radio_set_tx_address()
 {
+    P1OUT &= ~BIT3;
     bc_print_crlf("Set TX Addr");
     radio_nRF24L01P_write_register_data(NRF24L01P_ADDR_TX_ADDR, "node1", 5);
 }
@@ -197,6 +206,8 @@ void _radio_get_tx_address()
 
 void _radio_set_auto_ack()
 {
+    P1OUT &= ~BIT3;
+
     bc_print_crlf("Set AA");
     radio_nRF24L01P_write_register(NRF24L01P_ADDR_EN_AA, NRF24L01P_ENAA_P0);
 }
@@ -210,6 +221,7 @@ void _radio_get_auto_ack()
 
 void _radio_set_pipe_dynamic_payload()
 {
+    P1OUT &= ~BIT3;
     bc_print_crlf("Set DynP");
     radio_nRF24L01P_write_register(NRF24L01P_ADDR_DYNPD, 0);
 }
@@ -223,6 +235,7 @@ void _radio_get_pipe_dynamic_payload()
 
 void _radio_set_features()
 {
+    P1OUT &= ~BIT3;
     bc_print_crlf("Set Feat");
     radio_nRF24L01P_write_register(NRF24L01P_ADDR_FEATURE, 0);
 }
@@ -358,7 +371,6 @@ void _check_command()
         while ((running_mask >> cur_ind) > 1)
             ++cur_ind;
         
-        P1OUT &= ~BIT3;
         COMMAND_FUNC[cur_ind]();
     }
     else if (TX_MODE)
