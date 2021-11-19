@@ -194,9 +194,7 @@ void radio_nRF24L01P_write_register_data(i8 regaddr, i8 * data, i8 size);
 
 void radio_nRF24L01P_write_register(i8 regaddr, i8 byte);
 
-void radio_nRF24L01P_read_register(i8 regaddr);
-
-void radio_nRF24L01P_read_register_data(i8 regaddr, i8 nbytes);
+void radio_nRF24L01P_read_register(i8 regaddr, i8 nbytes);
 
 void radio_nRF24L01P_rx_byte(i8 byte);
 

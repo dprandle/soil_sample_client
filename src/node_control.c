@@ -32,7 +32,6 @@ void node_control_run()
 
         if (HANDLE_RADIO_RX_COMMAND)
         {
-            bc_print_crlf("Handling...");
             HANDLE_RADIO_RX_COMMAND();
             HANDLE_RADIO_RX_COMMAND = 0;
         }

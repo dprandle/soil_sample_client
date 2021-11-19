@@ -5,38 +5,47 @@
 #include "backchannel_uart.h"
 
 void (*CHECK_FOR_COMMAND_FUNC)(void)       = 0;
-char COMMANDS[COMMAND_COUNT][COMMAND_SIZE] = {{'c', 'f'}, {'r', 'x'}, {'t', 'x'}, {'p','u'}, {'p','d'}};
-void (*COMMAND_FUNC[COMMAND_COUNT])(void)  = {_radio_get_config, _RX_MODE, _TX_MODE, _radio_power_up, _radio_power_down};
+char COMMANDS[COMMAND_COUNT][COMMAND_SIZE] = {{'c', 'f'}, {'r', 'x'}, {'t', 'x'}, {'p','d'}, {'c','h'}};
+void (*COMMAND_FUNC[COMMAND_COUNT])(void)  = {_radio_get_config, _radio_power_up_rx, _radio_power_up_tx, _radio_power_down, _radio_get_freq_channel};
 
 Ring_Buffer bc_tx = {};
 Ring_Buffer bc_rx = {};
+int TX_MODE = 0;
 
 void _radio_get_config()
 {
-    bc_print("Getting radio config");
-    radio_nRF24L01P_read_register(NRF24L01P_ADDR_CONFIG);
-    __delay_cycles(10000);
+    bc_print_crlf("Get CFG");
+    radio_nRF24L01P_read_register(NRF24L01P_ADDR_CONFIG, 1);
+    //__delay_cycles(10000);
 }
 
-void _TX_MODE()
+void _radio_get_freq_channel()
 {
-    bc_print("TX_MODE\r\n");
+    bc_print_crlf("RF CH");
+    radio_nRF24L01P_read_register(NRF24L01P_ADDR_RF_CH, 1);
+    //__delay_cycles(10000);
 }
 
-void _RX_MODE()
+void _radio_power_up_rx()
 {
-    bc_print("RX_MODE\r\n");
+    bc_print_crlf("PU RX");
+    radio_nRF24L01P_write_register(NRF24L01P_ADDR_CONFIG, NRF24L01P_EN_CRC | NRF24L01P_PWR_UP | NRF24L01P_PRIM_RX);
+    P1OUT |= BIT3;
 }
 
-void _radio_power_up()
+void _radio_power_up_tx()
 {
-    bc_print("Power Up");
-    radio_nRF24L01P_write_register(NRF24L01P_ADDR_CONFIG, NRF24L01P_PWR_UP | NRF24L01P_EN_CRC);
+    TX_MODE = 1;
+    bc_print_crlf("PU TX");
+    P1OUT &= ~BIT3;
+    radio_nRF24L01P_write_register(NRF24L01P_ADDR_CONFIG, NRF24L01P_EN_CRC | NRF24L01P_PWR_UP);
 }
+
 
 void _radio_power_down()
 {
-    bc_print("Power Down");
+    bc_print_crlf("PD");
+    P1OUT &= ~BIT3;
     radio_nRF24L01P_write_register(NRF24L01P_ADDR_CONFIG, NRF24L01P_EN_CRC);
 }
 
@@ -110,6 +119,8 @@ void bc_print_raw(i8 byte)
 void _check_command()
 {
     i8 cur_ind = 0;
+    i8 data_cnt = rb_bytes_available(&bc_rx);
+    i8 start_ind = bc_rx.cur_ind;
 
     i8 running_mask = -1;
     while (bc_rx.cur_ind != bc_rx.end_ind)
@@ -135,12 +146,28 @@ void _check_command()
             bc_rx.cur_ind = 0;
     }
 
-    if (running_mask > 0)
+    if (running_mask > 0 && running_mask < 128)
     {
+        TX_MODE = 0;
         cur_ind = 0;
         while ((running_mask >> cur_ind) > 1)
             ++cur_ind;
         COMMAND_FUNC[cur_ind]();
+    }
+    else if (TX_MODE)
+    {
+        rb_write_byte(NRF24L01P_CMD_W_TX_PAYLOAD, &rad_tx);
+        while (start_ind != bc_rx.end_ind)
+        {
+            rb_write_byte(bc_rx.data[start_ind], &rad_tx);
+            ++start_ind;
+            if (start_ind == RING_BUFFER_SIZE)
+                start_ind = 0;
+        }
+        radio_nRF24L01P_burst_spi_tx();
+        P1OUT |= BIT3;
+        //__delay_cycles(200);
+        //P1OUT &= ~BIT3;
     }
 }
 

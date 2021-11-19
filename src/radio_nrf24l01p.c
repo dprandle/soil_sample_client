@@ -34,7 +34,7 @@ void _spi_init()
 
     // Enable TX and RX interrupts, then clear the interrupt flags
     UCB0IE |= (UCTXIE | UCRXIE);
-    UCB0IFG &= ~(UCTXIFG);// | UCRXIFG);
+    UCB0IFG &= ~(UCTXIFG); // | UCRXIFG);
 }
 
 void _pins_init()
@@ -124,33 +124,12 @@ void radio_nRF24L01P_write_register_data(i8 regaddr, i8 * data, i8 size)
     }
 }
 
-void radio_nRF24L01P_read_register(i8 regaddr)
-{
-    rb_write_byte(NRF24L01P_CMD_R_REGISTER | regaddr, &rad_tx);
-    rb_write_byte(NRF24L01P_CMD_NOP, &rad_tx);
-    rb_write_byte(NRF24L01P_CMD_NOP, &rad_tx);
-    rb_write_byte(NRF24L01P_CMD_NOP, &rad_tx);
-    rb_write_byte(NRF24L01P_CMD_NOP, &rad_tx);
-    rb_write_byte(NRF24L01P_CMD_NOP, &rad_tx);
-    rb_write_byte(NRF24L01P_CMD_NOP, &rad_tx);
-    rb_write_byte(NRF24L01P_CMD_NOP, &rad_tx);
-    rb_write_byte(NRF24L01P_CMD_NOP, &rad_tx);
-    if (rb_bytes_available(&rad_tx) == 9)
-    {
-        current_command = NRF24L01P_CMD_R_REGISTER | regaddr;
-        response_bytes_received = 0;
-        response_bytes_expected = 9;
-        P5OUT &= ~BIT0;
-        _send_next();
-    }
-}
-
-void radio_nRF24L01P_read_register_data(i8 regaddr, i8 nbytes)
+void radio_nRF24L01P_read_register(i8 regaddr, i8 nbytes)
 {
     rb_write_byte(NRF24L01P_CMD_R_REGISTER | regaddr, &rad_tx);
     for (int i = 0; i < nbytes; ++i)
         rb_write_byte(NRF24L01P_CMD_NOP, &rad_tx);
-    
+
     if (rb_bytes_available(&rad_tx) == nbytes + 1)
     {
         current_command = NRF24L01P_CMD_R_REGISTER | regaddr;
@@ -172,13 +151,11 @@ inline void _send_next()
     if (rad_tx.cur_ind == RING_BUFFER_SIZE)
         rad_tx.cur_ind = 0;
     UCB0TXBUF = b;
-    bc_print("tx");
-    bc_print_byte(b,16);
 }
 
 void radio_nRF24L01P_burst_spi_tx()
 {
-    bc_print_crlf("Here");
+    //bc_print_crlf("Here");
 
     // Disable TX and RX interrupts
     UCB0IE &= ~(UCTXIE | UCRXIE);
@@ -193,6 +170,9 @@ void radio_nRF24L01P_burst_spi_tx()
         // Clear both TX and RX flags
         UCB0IFG &= ~(UCTXIFG | UCRXIFG);
         _send_next();
+        if (rad_tx.cur_ind == RING_BUFFER_SIZE)
+            rad_tx.cur_ind = 0;
+        //bc_print("s");
     } while (rad_tx.cur_ind != rad_tx.end_ind && (UCB0IFG & UCTXIFG));
 
     // Re-enable the interrupt flags, first clearing the TX flag - want to run the RX ISR so don't clear it
@@ -210,45 +190,44 @@ void radio_nRF24L01P_burst_spi_tx()
     P5OUT |= BIT0;
 }
 
-__interrupt_vec(PORT2_VECTOR) void port_2_isr()
+__interrupt_vec(PORT1_VECTOR) void port_2_isr()
 {
-    switch (P2IV)
+    switch (P1IV)
     {
-    case (P2IV_NONE):
+    case (P1IV_NONE):
         break;
-    case (P2IV_P2IFG0):
-        bc_print_crlf("IRQ p2.0");
+    case (P1IV_P1IFG0):
+        bc_print_crlf("IRQ p1.0");
         break;
-    case (P2IV_P2IFG1):
-        //bc_uart_tx_str("IRQ P2.1!");
+    case (P1IV_P1IFG1):
+        bc_print_crlf("IRQ P1.1!");
         break;
-    case (P2IV_P2IFG2):
-        //bc_uart_tx_str("IRQ P2.2!");
+    case (P1IV_P1IFG2):
+        bc_print_crlf("IRQ P1.2!");
         break;
-    case (P2IV_P2IFG3):
-        //bc_uart_tx_str("IRQ P2.3!");
+    case (P1IV_P1IFG3):
+        bc_print_crlf("IRQ P1.3!");
         break;
-    case (P2IV_P2IFG4):
-        //bc_uart_tx_str("IRQ P2.4!");
+    case (P1IV_P1IFG4):
+        bc_print_crlf("IRQ P1.4!");
         break;
-    case (P2IV_P2IFG5):
-        //bc_uart_tx_str("IRQ P2.5!");
+    case (P1IV_P1IFG5):
+        bc_print_crlf("IRQ P1.5!");
         break;
-    case (P2IV_P2IFG6):
-        //bc_uart_tx_str("IRQ P2.6!");
+    case (P1IV_P1IFG6):
+        bc_print_crlf("IRQ P1.6!");
         break;
-    case (P2IV_P2IFG7):
-        //bc_uart_tx_str("IRQ P2.7!");
+    case (P1IV_P1IFG7):
+        bc_print_crlf("IRQ P1.7!");
         break;
     default:
-        //bc_uart_tx_str("IRQ None!");
+        bc_print_crlf("IRQ None!");
         break;
     }
 }
 
 void _check_rx_radio()
 {
-    bc_print("Doing Smthn..\n\r");
     while (rad_rx.cur_ind != rad_rx.end_ind)
     {
         ++rad_rx.cur_ind;
@@ -259,38 +238,31 @@ void _check_rx_radio()
 
 __interrupt_vec(USCI_B0_VECTOR) void spi_isr()
 {
-    static i8 b = 0;
     char      buff[3];
+    static i8 b = 0;
     switch (UCB0IV)
     {
     case (USCI_NONE):
         break;
     case (USCI_SPI_UCRXIFG):
         b = UCB0RXBUF;
-        bc_print_byte(b,16);
         if (response_bytes_expected != 0)
         {
+            rb_write_byte(b, &rad_rx);
             ++response_bytes_received;
-            //rb_write_byte(b, &rad_rx);
-
-            if (response_bytes_received == response_bytes_expected-1)
+            if (response_bytes_received == response_bytes_expected)
             {
                 P5OUT |= BIT0;
                 HANDLE_RADIO_RX_COMMAND = _check_rx_radio;
+                response_bytes_expected = 0;
+                response_bytes_received = 0;
                 LPM4_EXIT;
             }
         }
-        // else if (response_bytes_received > 0)
-        // {
-        //     bc_print("UH OH!");
-        //     response_bytes_received = 0;
-        // }
+        if (rad_tx.cur_ind != rad_tx.end_ind)
+            _send_next();
         break;
     case (USCI_SPI_UCTXIFG):
-        if (rad_tx.cur_ind != rad_tx.end_ind)
-        {
-            _send_next();
-        }
         break;
     default:
         break;

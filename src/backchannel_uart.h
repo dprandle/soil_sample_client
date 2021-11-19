@@ -8,6 +8,7 @@
 
 extern Ring_Buffer bc_tx;
 extern Ring_Buffer bc_rx;
+extern int TX_MODE;
 
 extern void (*CHECK_FOR_COMMAND_FUNC)(void);
 extern char COMMANDS[COMMAND_COUNT][COMMAND_SIZE];
@@ -25,11 +26,11 @@ void bc_print_raw(i8 byte);
 
 static void _radio_get_config();
 
-static void _TX_MODE();
+static void _radio_power_up_rx();
 
-static void _RX_MODE();
+static void _radio_power_up_tx();
 
-static void _radio_power_up();
+static void _radio_get_freq_channel();
 
 static void _radio_power_down();
 
