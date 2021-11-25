@@ -68,3 +68,16 @@ void rb_write_byte(i8 byte, Ring_Buffer * buf)
     if (buf->end_ind == RING_BUFFER_SIZE)
         buf->end_ind = 0;
 }
+
+void rb_flush(Ring_Buffer * buf)
+{
+    buf->cur_ind = buf->end_ind;
+}
+
+void rb_clear(Ring_Buffer * buf)
+{
+    for (int i = 0; i < RING_BUFFER_SIZE; ++i)
+        buf->data[i] = 0;
+    buf->cur_ind = 0;
+    buf->end_ind = 0;    
+}

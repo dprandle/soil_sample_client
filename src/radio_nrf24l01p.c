@@ -1,15 +1,34 @@
 #include <msp430.h>
 
+#include "node_control.h"
 #include "radio_nrf24l01p.h"
 #include "backchannel_uart.h"
+#include "rtc.h"
+
+#define RADIO_MAX_QUEUE_SIZE 14
+
+#define RADIO_UPDATE_TX_RX 0x01
+#define RADIO_UPDATE_SPI   0x02
 
 Ring_Buffer rad_tx = {};
 Ring_Buffer rad_rx = {};
 
-static i8 current_command = -1;
-static i8 response_bytes_received = 0;
-static i8 response_bytes_expected = 0;
-void (*HANDLE_RADIO_RX_COMMAND)(void) = 0;
+typedef struct
+{
+    i8 command;
+    i8 expected;
+    i8 received;
+} Radio_Command;
+
+static Radio_Command small_queue[RADIO_MAX_QUEUE_SIZE];
+static i8 radio_command_ind = 0;
+static i8 radio_proccessed_ind = 0;
+static i8 do_update = 0;
+static i8 current_config = RADIO_NOT_CONFIGURED;
+static i8 radio_received_startup_sync = 0;
+
+static i16 packets_sent = 0;
+static i16 packets_received = 0;
 
 void _spi_init()
 {
@@ -88,63 +107,161 @@ void _pins_init()
     P1IFG &= ~BIT6;
 }
 
-void radio_nRF24L01P_init()
+i8 radio_get_tx_or_rx()
+{
+    return current_config;
+}
+
+void radio_configure(i8 tx_or_rx)
+{
+    current_config = tx_or_rx;
+    if (tx_or_rx)
+        radio_write_register(NRF24L01P_ADDR_CONFIG, NRF24L01P_EN_CRC | NRF24L01P_PWR_UP);
+    else
+        radio_write_register(NRF24L01P_ADDR_CONFIG, NRF24L01P_EN_CRC | NRF24L01P_PWR_UP | NRF24L01P_PRIM_RX);
+}
+
+i8 radio_startup_synced()
+{
+    return radio_received_startup_sync;
+}
+
+void radio_enable()
+{
+    P1OUT |= BIT3;
+}
+
+void radio_disable()
+{
+    P1OUT &= ~BIT3;
+}
+
+void radio_enable_pulse()
+{
+    P1OUT |= BIT3;
+    __delay_cycles(DELAY_OF_11_uS);
+    P1OUT &= ~BIT3;
+}
+
+void radio_flush(i8 tx_or_rx)
+{
+    i8 cmd = NRF24L01P_CMD_FLUSH_RX;
+    if (tx_or_rx)
+        cmd = NRF24L01P_CMD_FLUSH_TX;
+
+    rb_write_byte(cmd, &rad_tx);
+    _add_command(cmd, 1);
+}
+
+void radio_clear_interrupts()
+{
+    radio_write_register(NRF24L01P_ADDR_STATUS, NRF24L01P_RX_DR | NRF24L01P_TX_DS | NRF24L01P_MAX_RT);
+}
+
+void radio_init()
 {
     _pins_init();
     _spi_init();
 
-    // Just for now - power up radio
+    radio_disable();
+
+    radio_flush(RADIO_TX);
+
+    radio_flush(RADIO_RX);
+
+    radio_clear_interrupts();
+
+    // Set payload length for RX pipe 0 to 32 bytes
+    radio_write_register(NRF24L01P_ADDR_RX_PW_P0, RADIO_PAYLOAD_SIZE);
+
+    // Turn off auto-retransmission
+    radio_write_register(NRF24L01P_ADDR_SETUP_RETR, 0);
+
+    // Turn off auto-ack for everything
+    radio_write_register(NRF24L01P_ADDR_EN_AA, 0);
+
+    // Set the channel
+    radio_write_register(NRF24L01P_ADDR_RF_CH, RF_CHANNEL);
 }
 
-void radio_nRF24L01P_write_register(i8 regaddr, i8 byte)
+void radio_write_register(i8 regaddr, i8 byte)
 {
     rb_write_byte(NRF24L01P_CMD_W_REGISTER | regaddr, &rad_tx);
     rb_write_byte(byte, &rad_tx);
-    if (rb_bytes_available(&rad_tx) == 2)
-    {
-        current_command = NRF24L01P_CMD_W_REGISTER | regaddr;
-        response_bytes_received = 0;
-        response_bytes_expected = 2;
-        P5OUT &= ~BIT0;
-        _send_next();
-    }
+    _add_command(NRF24L01P_CMD_W_REGISTER | regaddr, 2);
 }
 
-void radio_nRF24L01P_write_register_data(i8 regaddr, i8 * data, i8 size)
+void radio_write_register_data(i8 regaddr, i8 * data, i8 size)
 {
     rb_write_byte(NRF24L01P_CMD_W_REGISTER | regaddr, &rad_tx);
     rb_write(data, size, &rad_tx);
-    if (rb_bytes_available(&rad_tx) == size + 1)
-    {
-        current_command = NRF24L01P_CMD_W_REGISTER | regaddr;
-        response_bytes_received = 0;
-        response_bytes_expected = size + 1;
-        P5OUT &= ~BIT0;
-        _send_next();
-    }
+    _add_command(NRF24L01P_CMD_W_REGISTER | regaddr, size + 1);
 }
 
-void radio_nRF24L01P_read_register(i8 regaddr, i8 nbytes)
+void radio_read_register(i8 regaddr, i8 nbytes)
 {
     rb_write_byte(NRF24L01P_CMD_R_REGISTER | regaddr, &rad_tx);
     for (int i = 0; i < nbytes; ++i)
         rb_write_byte(NRF24L01P_CMD_NOP, &rad_tx);
+    _add_command(NRF24L01P_CMD_R_REGISTER | regaddr, nbytes + 1);
+}
 
-    if (rb_bytes_available(&rad_tx) == nbytes + 1)
+void radio_update()
+{
+    if ((do_update & RADIO_UPDATE_SPI) == RADIO_UPDATE_SPI)
     {
-        current_command = NRF24L01P_CMD_R_REGISTER | regaddr;
-        response_bytes_received = 0;
-        response_bytes_expected = nbytes + 1;
-        P5OUT &= ~BIT0;
-        _send_next();
+        do_update &= ~RADIO_UPDATE_SPI;
+        rb_flush(&rad_rx);
+        //_print_rx_buf(16);
+    }
+
+    if ((do_update & RADIO_UPDATE_TX_RX) == RADIO_UPDATE_TX_RX)
+    {
+        do_update &= ~RADIO_UPDATE_TX_RX;
+        if (!current_config)
+        {
+            radio_burst_spi_rx(NRF24L01P_CMD_R_RX_PAYLOAD, RADIO_PAYLOAD_SIZE);
+            //_print_rx_buf(0);
+            rb_flush(&rad_rx);
+            ++packets_received;
+            bc_print("RX PACKET:");
+            bc_print_byte(packets_received, 10);
+            bc_print_raw('\r');
+            bc_print_raw('\n');
+            if (!radio_received_startup_sync)
+            {
+                bc_print_crlf("RX Start Sync");
+                radio_received_startup_sync = 1;
+            }
+        }
+        else
+        {
+            bc_print_byte(get_frame_info()->ind, 10);
+            bc_print_crlf(" Frames Sent");
+            radio_configure(RADIO_RX);
+        }
+        radio_clear_interrupts();
     }
 }
 
-void radio_nRF24L01P_rx_byte(i8 byte)
-{}
+inline void _add_command(i8 cmd, i8 expected)
+{
+    small_queue[radio_command_ind].command = cmd;
+    small_queue[radio_command_ind].received = 0;
+    small_queue[radio_command_ind].expected = expected;
+
+    i8 should_send = (radio_command_ind == radio_proccessed_ind);
+    ++radio_command_ind;
+    if (radio_command_ind == RADIO_MAX_QUEUE_SIZE)
+        radio_command_ind = 0;
+
+    if (should_send)
+        _send_next();
+}
 
 inline void _send_next()
 {
+    P5OUT &= ~BIT0;
     static i8 b = 0;
     b = rad_tx.data[rad_tx.cur_ind];
     ++rad_tx.cur_ind;
@@ -153,9 +270,42 @@ inline void _send_next()
     UCB0TXBUF = b;
 }
 
-void radio_nRF24L01P_burst_spi_tx()
+void radio_burst_spi_tx(i8 cmd_address)
 {
-    //bc_print_crlf("Here");
+    // Disable TX and RX interrupts
+    UCB0IE &= ~(UCTXIE | UCRXIE);
+
+    // Set CSN to enable radio
+    P5OUT &= ~BIT0;
+
+    // Write the command address
+    UCB0TXBUF = cmd_address;
+    while (!(UCB0IFG & UCTXIFG));
+
+    // While TX IFG is set and there is still data to send in the ring buffer, clear the TX interrupt flag
+    // and send the next byte. Once no more data, this will end.
+    while (rad_tx.cur_ind != rad_tx.end_ind)
+    {
+        UCB0IFG &= ~(UCTXIFG | UCRXIFG);
+        _send_next();
+        while (!(UCB0IFG & UCTXIFG));
+    }
+
+    // Re-enable the interrupt flags, first clearing the TX flag - want to run the RX ISR so don't clear it
+    UCB0IFG &= ~(UCTXIFG);
+    UCB0IE |= (UCTXIE | UCRXIE);
+
+    // Wait until the last byte is done sending before changing CSN back. Essentially wait until the RX interrupt is run
+    // before putting the CSN back.
+    while (UCB0IFG & UCRXIFG);
+
+    // Set CSN again to indicate we are done
+    P5OUT |= BIT0;
+}
+
+void radio_burst_spi_rx(i8 cmd_address, i8 nbytes)
+{
+    //    rtc_stop();
 
     // Disable TX and RX interrupts
     UCB0IE &= ~(UCTXIE | UCRXIE);
@@ -163,31 +313,30 @@ void radio_nRF24L01P_burst_spi_tx()
     // Set CSN to enable radio
     P5OUT &= ~BIT0;
 
-    // While TX IFG is set and there is still data to send in the ring buffer, clear the TX interrupt flag
-    // and send the next byte. Once no more data, this will end.
-    do
-    {
-        // Clear both TX and RX flags
-        UCB0IFG &= ~(UCTXIFG | UCRXIFG);
-        _send_next();
-        if (rad_tx.cur_ind == RING_BUFFER_SIZE)
-            rad_tx.cur_ind = 0;
-        //bc_print("s");
-    } while (rad_tx.cur_ind != rad_tx.end_ind && (UCB0IFG & UCTXIFG));
-
-    // Re-enable the interrupt flags, first clearing the TX flag - want to run the RX ISR so don't clear it
-    UCB0IFG &= ~UCTXIFG;
-
-    // Set that we are expecting 1 byte, let the RX ISR clear the CSN
-    UCB0IE |= (UCTXIE | UCRXIE);
-
-    // Wait until the last byte is done sending before changing CSN back. Essentially wait until the RX interrupt is run
-    // before putting the CSN back.
-    while (UCB0IFG & UCRXIFG)
+    // Write the command address
+    UCB0TXBUF = cmd_address;
+    while (!(UCB0IFG & UCRXIFG))
         ;
+
+    // While RX IFG is set and we haven't reached nbytes yet, clear the RX interrupt flag
+    // and send the next byte. Once no more data, this will end.
+    while (nbytes)
+    {
+        UCB0IFG &= ~(UCTXIFG | UCRXIFG);
+        UCB0TXBUF = NRF24L01P_CMD_NOP;
+        while (!(UCB0IFG & UCRXIFG))
+            ;
+        rb_write_byte(UCB0RXBUF, &rad_rx);
+        --nbytes;
+    }
+
+    // Re-enable the interrupt flags clear them first
+    UCB0IFG &= ~(UCTXIFG | UCTXIFG);
+    UCB0IE |= (UCTXIE | UCRXIE);
 
     // Set CSN again to indicate we are done
     P5OUT |= BIT0;
+    //    rtc_start();
 }
 
 __interrupt_vec(PORT1_VECTOR) void port_2_isr()
@@ -197,40 +346,37 @@ __interrupt_vec(PORT1_VECTOR) void port_2_isr()
     case (P1IV_NONE):
         break;
     case (P1IV_P1IFG0):
-        bc_print_crlf("IRQ p1.0");
         break;
     case (P1IV_P1IFG1):
-        bc_print_crlf("IRQ P1.1!");
         break;
     case (P1IV_P1IFG2):
-        bc_print_crlf("IRQ P1.2!");
         break;
     case (P1IV_P1IFG3):
-        bc_print_crlf("IRQ P1.3!");
         break;
     case (P1IV_P1IFG4):
-        bc_print_crlf("IRQ P1.4!");
         break;
     case (P1IV_P1IFG5):
-        bc_print_crlf("IRQ P1.5!");
         break;
     case (P1IV_P1IFG6):
-        bc_print_crlf("IRQ P1.6!");
+        do_update |= RADIO_UPDATE_TX_RX;
+        P1OUT &= ~BIT4;
+        LPM4_EXIT;
         break;
     case (P1IV_P1IFG7):
-        bc_print_crlf("IRQ P1.7!");
         break;
     default:
-        bc_print_crlf("IRQ None!");
         break;
     }
 }
 
-void _check_rx_radio()
+void _print_rx_buf(i8 base)
 {
     while (rad_rx.cur_ind != rad_rx.end_ind)
     {
-        bc_print_byte(rad_rx.data[rad_rx.cur_ind],16);
+        if (base)
+            bc_print_byte(rad_rx.data[rad_rx.cur_ind], base);
+        else
+            bc_print_raw(rad_rx.data[rad_rx.cur_ind]);
         ++rad_rx.cur_ind;
         if (rad_rx.cur_ind == RING_BUFFER_SIZE)
             rad_rx.cur_ind = 0;
@@ -240,7 +386,7 @@ void _check_rx_radio()
 
 __interrupt_vec(USCI_B0_VECTOR) void spi_isr()
 {
-    char      buff[3];
+    char buff[3];
     static i8 b = 0;
     switch (UCB0IV)
     {
@@ -248,16 +394,17 @@ __interrupt_vec(USCI_B0_VECTOR) void spi_isr()
         break;
     case (USCI_SPI_UCRXIFG):
         b = UCB0RXBUF;
-        if (response_bytes_expected != 0)
+        if (small_queue[radio_proccessed_ind].expected != small_queue[radio_proccessed_ind].received)
         {
             rb_write_byte(b, &rad_rx);
-            ++response_bytes_received;
-            if (response_bytes_received == response_bytes_expected)
+            ++small_queue[radio_proccessed_ind].received;
+            if (small_queue[radio_proccessed_ind].received == small_queue[radio_proccessed_ind].expected)
             {
                 P5OUT |= BIT0;
-                HANDLE_RADIO_RX_COMMAND = _check_rx_radio;
-                response_bytes_expected = 0;
-                response_bytes_received = 0;
+                do_update |= RADIO_UPDATE_SPI;
+                ++radio_proccessed_ind;
+                if (radio_proccessed_ind == RADIO_MAX_QUEUE_SIZE)
+                    radio_proccessed_ind = 0;
                 LPM4_EXIT;
             }
         }

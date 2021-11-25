@@ -187,21 +187,49 @@
 
 extern Ring_Buffer rad_tx;
 extern Ring_Buffer rad_rx;
-extern void (*HANDLE_RADIO_RX_COMMAND)(void);
 
-void radio_nRF24L01P_init();
+#define RF_CHANNEL 101
+#define RADIO_PAYLOAD_SIZE 32
+
+#define RADIO_TX 1
+#define RADIO_RX 0
+#define RADIO_NOT_CONFIGURED -1
+
+void radio_init();
+
+void radio_update();
+
+void radio_configure(i8 tx_or_rx);
+
+i8 radio_get_tx_or_rx();
+
+void radio_enable();
+
+void radio_disable();
+
+void radio_enable_pulse();
+
+void radio_clear_interrupts();
+
+i8 radio_startup_synced();
+
+/// 1 for TX and 0 for RX
+void radio_flush(i8 tx_or_rx);
 
 /// Transmit all data pending in rad_tx as fast as possible, ignoring
 /// all RX bytes shifted back
-void radio_nRF24L01P_burst_spi_tx();
+void radio_burst_spi_tx(i8 cmd_address);
 
-void radio_nRF24L01P_write_register_data(i8 regaddr, i8 * data, i8 size);
+/// Get nbytes as fast as possible, by polling the rx register
+void radio_burst_spi_rx(i8 cmd_address, i8 nbytes);
 
-void radio_nRF24L01P_write_register(i8 regaddr, i8 byte);
+void radio_write_register_data(i8 regaddr, i8 * data, i8 size);
 
-void radio_nRF24L01P_read_register(i8 regaddr, i8 nbytes);
+void radio_write_register(i8 regaddr, i8 byte);
 
-void radio_nRF24L01P_rx_byte(i8 byte);
+void radio_read_register(i8 regaddr, i8 nbytes);
+
+static inline void _add_command(i8 cmd, i8 expected);
 
 static inline void _send_next();
 
@@ -209,4 +237,4 @@ static void _spi_init();
 
 static void _pins_init();
 
-static void _check_rx_radio();
+static void _print_rx_buf(i8 base);
