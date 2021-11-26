@@ -4,10 +4,26 @@
 #include "radio_nrf24l01p.h"
 #include "backchannel_uart.h"
 
-#define COMMAND_SIZE  2
-#define COMMAND_COUNT 29
+#define COMMAND_SIZE 2
+
+Ring_Buffer bc_tx = {};
+Ring_Buffer bc_rx = {};
 
 void (*CHECK_FOR_COMMAND_FUNC)(void) = 0;
+
+#ifndef RADIO_DEBUG_SPI
+#define COMMAND_COUNT 1
+
+char COMMANDS[COMMAND_COUNT][COMMAND_SIZE] = {{'s', 'i'}};
+
+void (*COMMAND_FUNC[COMMAND_COUNT])(void) = {_sample_func};
+
+inline void _sample_func()
+{
+    bc_print_crlf("Sample");
+}
+#else
+#define COMMAND_COUNT 29
 char COMMANDS[COMMAND_COUNT][COMMAND_SIZE] = {{'C', 'I'}, {'R', 'X'}, {'T', 'X'}, {'c', 'f'}, {'C', 'H'}, {'c', 'h'}, {'R', 'F'}, {'C', 'W'}, {'r', 'f'}, {'R', 'T'},
                                               {'r', 't'}, {'A', 'W'}, {'a', 'w'}, {'P', 'E'}, {'p', 'e'}, {'R', 'A'}, {'r', 'a'}, {'T', 'A'}, {'t', 'a'}, {'A', 'A'},
                                               {'a', 'a'}, {'D', 'P'}, {'d', 'p'}, {'F', 'T'}, {'f', 't'}, {'f', 'i'}, {'p', 's'}, {'r', 'p'}, {'E', 'N'}};
@@ -21,10 +37,6 @@ void (*COMMAND_FUNC[COMMAND_COUNT])(void) = {
     _radio_get_auto_ack,          _radio_set_pipe_dynamic_payload, _radio_get_pipe_dynamic_payload, _radio_set_features,
     _radio_get_features,          _radio_get_fifo_status,          _radio_get_packet_stats,         _radio_get_rx_power,
     _radio_toggle_enable};
-
-Ring_Buffer bc_tx = {};
-Ring_Buffer bc_rx = {};
-int TX_MODE = 0;
 
 void _radio_clear_interrupts()
 {
@@ -204,6 +216,7 @@ void _radio_toggle_enable()
     else
         bc_print_crlf("Disabled");
 }
+#endif
 
 void _uart_init()
 {
@@ -322,7 +335,6 @@ void _check_command()
 
     if (running_mask > 0 && running_mask != -1 && cur_ind == COMMAND_SIZE)
     {
-        TX_MODE = 0;
         cur_ind = 0;
         while ((running_mask >> cur_ind) > 1)
             ++cur_ind;

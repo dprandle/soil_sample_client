@@ -17,5 +17,9 @@ file(GLOB SRC_FILES
   "${SRC_DIR}/*.c"
   )
 
+# Uncomment the line below to allow manual commands and command feedback to show on BC Uart
+# This will affect the TX frame timing so only do it to debug radio
+#add_definitions(-DRADIO_DEBUG_SPI)
+
 msp430_add_executable(${TARGET_NAME} ${SRC_FILES})
 target_link_libraries(${TARGET_NAME} c gcc)

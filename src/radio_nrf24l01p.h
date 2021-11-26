@@ -246,4 +246,6 @@ static void _spi_init();
 
 static void _pins_init();
 
-static void _print_rx_buf(i8 base);
+#ifdef RADIO_DEBUG_SPI
+static inline void _print_rx_buf(i8 base);
+#endif

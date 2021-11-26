@@ -144,7 +144,6 @@ Packet_Callback radio_get_pckt_tx_cb()
     return tx_cback;
 }
 
-
 void radio_configure(i8 tx_or_rx)
 {
     current_config = tx_or_rx;
@@ -236,14 +235,6 @@ void radio_read_register(i8 regaddr, i8 nbytes)
 
 void radio_update()
 {
-    //bc_print_crlf("Update");
-    if ((do_update & RADIO_UPDATE_SPI) == RADIO_UPDATE_SPI)
-    {
-        do_update &= ~RADIO_UPDATE_SPI;
-        rb_flush(&rad_rx);
-        //_print_rx_buf(16);
-    }
-
     if ((do_update & RADIO_UPDATE_TX_RX) == RADIO_UPDATE_TX_RX)
     {
         do_update &= ~RADIO_UPDATE_TX_RX;
@@ -263,6 +254,14 @@ void radio_update()
         }
         radio_clear_interrupts();
     }
+
+#ifdef RADIO_DEBUG_SPI
+    if ((do_update & RADIO_UPDATE_SPI) == RADIO_UPDATE_SPI)
+    {
+        do_update &= ~RADIO_UPDATE_SPI;
+        _print_rx_buf(16);
+    }
+#endif
 }
 
 inline void _add_command(i8 cmd, i8 expected)
@@ -301,7 +300,8 @@ void radio_burst_spi_tx(i8 cmd_address)
 
     // Write the command address
     UCB0TXBUF = cmd_address;
-    while (!(UCB0IFG & UCTXIFG));
+    while (!(UCB0IFG & UCTXIFG))
+        ;
 
     // While TX IFG is set and there is still data to send in the ring buffer, clear the TX interrupt flag
     // and send the next byte. Once no more data, this will end.
@@ -309,7 +309,8 @@ void radio_burst_spi_tx(i8 cmd_address)
     {
         UCB0IFG &= ~(UCTXIFG | UCRXIFG);
         _send_next();
-        while (!(UCB0IFG & UCTXIFG));
+        while (!(UCB0IFG & UCTXIFG))
+            ;
     }
 
     // Re-enable the interrupt flags, first clearing the TX flag - want to run the RX ISR so don't clear it
@@ -318,7 +319,8 @@ void radio_burst_spi_tx(i8 cmd_address)
 
     // Wait until the last byte is done sending before changing CSN back. Essentially wait until the RX interrupt is run
     // before putting the CSN back.
-    while (UCB0IFG & UCRXIFG);
+    while (UCB0IFG & UCRXIFG)
+        ;
 
     // Set CSN again to indicate we are done
     P5OUT |= BIT0;
@@ -326,8 +328,6 @@ void radio_burst_spi_tx(i8 cmd_address)
 
 void radio_burst_spi_rx(i8 cmd_address, i8 nbytes)
 {
-    //    rtc_stop();
-
     // Disable TX and RX interrupts
     UCB0IE &= ~(UCTXIE | UCRXIE);
 
@@ -357,8 +357,25 @@ void radio_burst_spi_rx(i8 cmd_address, i8 nbytes)
 
     // Set CSN again to indicate we are done
     P5OUT |= BIT0;
-    //    rtc_start();
 }
+
+#ifdef RADIO_DEBUG_SPI
+inline void _print_rx_buf(i8 base)
+{
+    while (rad_rx.cur_ind != rad_rx.end_ind)
+    {
+        if (base)
+            bc_print_byte(rad_rx.data[rad_rx.cur_ind], base);
+        else
+            bc_print_raw(rad_rx.data[rad_rx.cur_ind]);
+        bc_print_raw(' ');
+        ++rad_rx.cur_ind;
+        if (rad_rx.cur_ind == RING_BUFFER_SIZE)
+            rad_rx.cur_ind = 0;
+    }
+    bc_print("\r\n");
+}
+#endif
 
 __interrupt_vec(PORT1_VECTOR) void port_2_isr()
 {
@@ -390,21 +407,6 @@ __interrupt_vec(PORT1_VECTOR) void port_2_isr()
     }
 }
 
-void _print_rx_buf(i8 base)
-{
-    while (rad_rx.cur_ind != rad_rx.end_ind)
-    {
-        if (base)
-            bc_print_byte(rad_rx.data[rad_rx.cur_ind], base);
-        else
-            bc_print_raw(rad_rx.data[rad_rx.cur_ind]);
-        ++rad_rx.cur_ind;
-        if (rad_rx.cur_ind == RING_BUFFER_SIZE)
-            rad_rx.cur_ind = 0;
-    }
-    bc_print("\r\n");
-}
-
 __interrupt_vec(USCI_B0_VECTOR) void spi_isr()
 {
     char buff[3];
@@ -417,16 +419,20 @@ __interrupt_vec(USCI_B0_VECTOR) void spi_isr()
         b = UCB0RXBUF;
         if (small_queue[radio_proccessed_ind].expected != small_queue[radio_proccessed_ind].received)
         {
+#ifdef RADIO_DEBUG_SPI
             rb_write_byte(b, &rad_rx);
+#endif
             ++small_queue[radio_proccessed_ind].received;
             if (small_queue[radio_proccessed_ind].received == small_queue[radio_proccessed_ind].expected)
             {
                 P5OUT |= BIT0;
-                do_update |= RADIO_UPDATE_SPI;
                 ++radio_proccessed_ind;
                 if (radio_proccessed_ind == RADIO_MAX_QUEUE_SIZE)
                     radio_proccessed_ind = 0;
+#ifdef RADIO_DEBUG_SPI
+                do_update |= RADIO_UPDATE_SPI;
                 LPM4_EXIT;
+#endif
             }
         }
         if (rad_tx.cur_ind != rad_tx.end_ind)

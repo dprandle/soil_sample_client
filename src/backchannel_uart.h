@@ -5,7 +5,6 @@
 
 extern Ring_Buffer bc_tx;
 extern Ring_Buffer bc_rx;
-extern int TX_MODE;
 
 void bc_init();
 
@@ -21,6 +20,17 @@ void bc_print_int(i16 byte, i8 base);
 
 void bc_print_raw(i8 byte);
 
+static void _check_command();
+
+static void _uart_init();
+
+static void _pin_init();
+
+static inline void _sample_func();
+
+static inline void _send_next();
+
+#ifdef RADIO_DEBUG_SPI
 static void _radio_clear_interrupts();
 
 static void _radio_set_config_power_up_rx();
@@ -78,11 +88,4 @@ static void _radio_get_packet_stats();
 static void _radio_get_rx_power();
 
 static void _radio_toggle_enable();
-
-static void _check_command();
-
-static void _uart_init();
-
-static void _pin_init();
-
-static inline void _send_next();
+#endif

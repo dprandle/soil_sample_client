@@ -32,6 +32,7 @@ void rx_packet_received()
 void frame_start()
 {
     ++nctrl.cur_frame.cur_timeslot;
+    //bc_print_int(rtc_get_tick_cycles(),10);
     if (nctrl.cur_frame.cur_timeslot == nctrl.cur_frame.our_timeslot)
     {
         // The frame after this HAS to be TX - only one rx frame and def not end of frame.. so...
@@ -52,7 +53,7 @@ void frame_prep_start()
     rtc_set_interrupt_tick_count(0);
     rtc_set_cb(frame_start);
     toggel_pin_next_isr = 1;
-    if (nctrl.cur_frame.cur_timeslot == 1)
+    if (nctrl.cur_frame.cur_timeslot+1 == 1)
         rtc_set_tick_cycles(nctrl.t.rx_packet_to_tx);
     else
         rtc_set_tick_cycles(nctrl.t.rx_packet_to_rx - nctrl.src_t.frame_extra_listen);
@@ -187,20 +188,16 @@ static void _setup_rtc()
     nctrl.timeslots_per_frame = 8;
     nctrl.startup_listen_frame_count = 4; // Wait 4 * 2 == 8 seconds
     nctrl.sleep_frame_count = 2;
-    nctrl.src_t.timeslot = 4096; //CRYSTAL_FREQ / 8; // 125 ms
+    nctrl.src_t.timeslot = CRYSTAL_FREQ / 8; // 125 ms
     nctrl.src_t.settle = 5;      // 152.59 uS
     double exact_calc = CRYSTAL_PPM * 0.000001 * 2.0 * nctrl.src_t.timeslot * nctrl.timeslots_per_frame;
     nctrl.src_t.listen = (u8)(exact_calc + ROUND_THRESHOLD);
-    nctrl.src_t.frame_extra_listen = (u8)(exact_calc * nctrl.sleep_frame_count + ROUND_THRESHOLD) - nctrl.src_t.listen;
+    nctrl.src_t.frame_extra_listen = 0;//(u8)(exact_calc * nctrl.sleep_frame_count + ROUND_THRESHOLD) - nctrl.src_t.listen;
     _recalc_rtc_derived_from_source();
 
     rtc_init();
-
-    // Wait in RX mode for 4 seconds
-    rtc_set_interrupt_tick_count(4);
-
-    // Startup wait as RX for packet time
     rtc_set_interrupt_tick_count(nctrl.timeslots_per_frame * nctrl.startup_listen_frame_count);
+    rtc_set_tick_cycles(nctrl.t.timeslot);
     rtc_set_mode(RTC_MODE_ONE_SHOT);
     rtc_set_cb(turn_rx_off);
 }
