@@ -40,7 +40,6 @@ void _radio_set_config_power_up_rx()
 
 void _radio_set_config_power_up_tx()
 {
-    TX_MODE = 1;
     bc_print_crlf("TX Mode");
     radio_write_register(NRF24L01P_ADDR_CONFIG, NRF24L01P_EN_CRC | NRF24L01P_PWR_UP);
 }
@@ -329,23 +328,6 @@ void _check_command()
             ++cur_ind;
 
         COMMAND_FUNC[cur_ind]();
-    }
-    else if (TX_MODE)
-    {
-        while (start_ind != bc_rx.end_ind)
-        {
-            if (bc_rx.data[start_ind] == '\n' || bc_rx.data[start_ind] == '\r')
-                break;
-
-            rb_write_byte(bc_rx.data[start_ind], &rad_tx);
-            ++start_ind;
-            if (start_ind == RING_BUFFER_SIZE)
-                start_ind = 0;
-        }
-        radio_burst_spi_tx(NRF24L01P_CMD_W_TX_PAYLOAD);
-        P1OUT |= BIT3;
-        __delay_cycles(200);
-        P1OUT &= ~BIT3;
     }
 }
 

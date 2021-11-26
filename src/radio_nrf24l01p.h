@@ -185,15 +185,14 @@
 #define NRF24L01P_FEATURE_EN_ACK_PAY 0x02
 #define NRF24L01P_FEATURE_EN_DYN_ACK 0x01
 
-extern Ring_Buffer rad_tx;
-extern Ring_Buffer rad_rx;
-
 #define RF_CHANNEL 101
 #define RADIO_PAYLOAD_SIZE 32
 
 #define RADIO_TX 1
 #define RADIO_RX 0
 #define RADIO_NOT_CONFIGURED -1
+
+typedef void (*Packet_Callback)(void);
 
 void radio_init();
 
@@ -207,11 +206,21 @@ void radio_enable();
 
 void radio_disable();
 
+void radio_clock_in(u8 * data, u8 size);
+
+void radio_clock_out(u8 * data, u8 size);
+
 void radio_enable_pulse();
 
 void radio_clear_interrupts();
 
-i8 radio_startup_synced();
+void radio_set_pckt_rx_cb(Packet_Callback cback);
+
+Packet_Callback radio_get_pckt_rx_cb();
+
+void radio_set_pckt_tx_cb(Packet_Callback cback);
+
+Packet_Callback radio_get_pckt_tx_cb();
 
 /// 1 for TX and 0 for RX
 void radio_flush(i8 tx_or_rx);

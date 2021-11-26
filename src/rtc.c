@@ -36,7 +36,7 @@ void rtc_update()
     }
 }
 
-void rtc_set_callback(RTC_Callback callback)
+void rtc_set_cb(RTC_Callback callback)
 {
     cback = callback;
 }

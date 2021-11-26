@@ -11,7 +11,7 @@ typedef void (*RTC_Callback)(void);
 
 void rtc_init();
 
-void rtc_set_callback(RTC_Callback callback);
+void rtc_set_cb(RTC_Callback callback);
 
 void rtc_start();
 

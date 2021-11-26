@@ -92,7 +92,7 @@ void frame_end();
 void frame_rx_timeslot_end();
 void frame_rx_timeslot_begin();
 void frame_tx_timeslot();
-Frame_Info * get_frame_info();
+
 
 void node_control_init();
 void node_control_run();

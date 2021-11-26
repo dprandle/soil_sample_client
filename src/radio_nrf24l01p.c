@@ -10,8 +10,11 @@
 #define RADIO_UPDATE_TX_RX 0x01
 #define RADIO_UPDATE_SPI   0x02
 
-Ring_Buffer rad_tx = {};
-Ring_Buffer rad_rx = {};
+static Ring_Buffer rad_tx = {};
+static Ring_Buffer rad_rx = {};
+
+static Packet_Callback rx_cback = 0;
+static Packet_Callback tx_cback = 0;
 
 typedef struct
 {
@@ -25,10 +28,6 @@ static i8 radio_command_ind = 0;
 static i8 radio_proccessed_ind = 0;
 static i8 do_update = 0;
 static i8 current_config = RADIO_NOT_CONFIGURED;
-static i8 radio_received_startup_sync = 0;
-
-static i16 packets_sent = 0;
-static i16 packets_received = 0;
 
 void _spi_init()
 {
@@ -107,10 +106,44 @@ void _pins_init()
     P1IFG &= ~BIT6;
 }
 
+void radio_clock_in(u8 * data, u8 size)
+{
+    rb_write(data, size, &rad_tx);
+    radio_burst_spi_tx(NRF24L01P_CMD_W_TX_PAYLOAD);
+}
+
+void radio_clock_out(u8 * data, u8 size)
+{
+    radio_burst_spi_rx(NRF24L01P_CMD_R_RX_PAYLOAD, RADIO_PAYLOAD_SIZE);
+    for (u8 i = 0; i < size; ++i)
+        rb_read(data, size, &rad_rx);
+}
+
 i8 radio_get_tx_or_rx()
 {
     return current_config;
 }
+
+void radio_set_pckt_rx_cb(Packet_Callback cback)
+{
+    rx_cback = cback;
+}
+
+Packet_Callback radio_get_pckt_rx_cb()
+{
+    return rx_cback;
+}
+
+void radio_set_pckt_tx_cb(Packet_Callback cback)
+{
+    tx_cback = cback;
+}
+
+Packet_Callback radio_get_pckt_tx_cb()
+{
+    return tx_cback;
+}
+
 
 void radio_configure(i8 tx_or_rx)
 {
@@ -119,11 +152,6 @@ void radio_configure(i8 tx_or_rx)
         radio_write_register(NRF24L01P_ADDR_CONFIG, NRF24L01P_EN_CRC | NRF24L01P_PWR_UP);
     else
         radio_write_register(NRF24L01P_ADDR_CONFIG, NRF24L01P_EN_CRC | NRF24L01P_PWR_UP | NRF24L01P_PRIM_RX);
-}
-
-i8 radio_startup_synced()
-{
-    return radio_received_startup_sync;
 }
 
 void radio_enable()
@@ -208,6 +236,7 @@ void radio_read_register(i8 regaddr, i8 nbytes)
 
 void radio_update()
 {
+    //bc_print_crlf("Update");
     if ((do_update & RADIO_UPDATE_SPI) == RADIO_UPDATE_SPI)
     {
         do_update &= ~RADIO_UPDATE_SPI;
@@ -220,25 +249,17 @@ void radio_update()
         do_update &= ~RADIO_UPDATE_TX_RX;
         if (!current_config)
         {
-            radio_burst_spi_rx(NRF24L01P_CMD_R_RX_PAYLOAD, RADIO_PAYLOAD_SIZE);
-            //_print_rx_buf(0);
-            rb_flush(&rad_rx);
-            ++packets_received;
-            bc_print("RX PACKET:");
-            bc_print_byte(packets_received, 10);
-            bc_print_raw('\r');
-            bc_print_raw('\n');
-            if (!radio_received_startup_sync)
-            {
-                bc_print_crlf("RX Start Sync");
-                radio_received_startup_sync = 1;
-            }
+            if (rx_cback)
+                rx_cback();
+            else
+                bc_print_crlf("No RX CB");
         }
         else
         {
-            bc_print_byte(get_frame_info()->ind, 10);
-            bc_print_crlf(" Frames Sent");
-            radio_configure(RADIO_RX);
+            if (tx_cback)
+                tx_cback();
+            else
+                bc_print_crlf("No TX CB");
         }
         radio_clear_interrupts();
     }
