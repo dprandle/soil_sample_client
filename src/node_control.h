@@ -8,6 +8,8 @@
 #define CRYSTAL_FREQ    32768
 #define ROUND_THRESHOLD 0.75
 #define MAX_TIMESLOTS_PER_FRAME 32
+#define OUR_TIMESLOT_DATA nctrl.cur_frame.timeslots[nctrl.cur_frame.our_timeslot-1]
+#define CUR_TIMESLOT_DATA nctrl.cur_frame.timeslots[nctrl.cur_frame.cur_timeslot-1]
 
 typedef struct
 {

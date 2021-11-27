@@ -28,8 +28,8 @@ void _clock_out_payload()
 {
     nctrl.cur_frame.ind = pckt.frame_ind;
     nctrl.cur_frame.cur_timeslot = pckt.timeslot;
-    nctrl.cur_frame.timeslots[nctrl.cur_frame.cur_timeslot].timeslot_mask = pckt.timeslot_mask;
-    nctrl.cur_frame.timeslots[nctrl.cur_frame.cur_timeslot].data = pckt.data;
+    CUR_TIMESLOT_DATA.timeslot_mask = pckt.timeslot_mask;
+    CUR_TIMESLOT_DATA.data = pckt.data;
     nctrl.total_node_count = pckt.total_node_count;
     radio_clock_out(pckt.raw_data, RADIO_PAYLOAD_SIZE);
     bc_print_crlf("RX Packet");
@@ -118,11 +118,8 @@ void rx_packet_received()
 {
     P1OUT &= ~BIT4;
     radio_disable();
-    
-    if (!rx_synced)
-    {
-        rx_synced = 1;
-    }
+
+    rx_synced = 1;
 
     // Restart the timer
     _reset_clock_to_cycles(nctrl.t.timeslot, 0);
@@ -250,8 +247,8 @@ void turn_rx_off()
         nctrl.cur_frame.ind = 0;
         nctrl.cur_frame.our_timeslot = 1;
         nctrl.cur_frame.cur_timeslot = 1;
-        nctrl.cur_frame.timeslots[nctrl.cur_frame.our_timeslot - 1].data.src_addr = 0x01;
-        nctrl.cur_frame.timeslots[nctrl.cur_frame.our_timeslot - 1].data.dest_addr = 0x00;
+        OUR_TIMESLOT_DATA.data.src_addr = 0x01;
+        OUR_TIMESLOT_DATA.data.dest_addr = 0x00;
 
         radio_disable();
         radio_configure(RADIO_TX);
