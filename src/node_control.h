@@ -35,9 +35,7 @@ typedef union
 typedef struct
 {
     i8 timeslot_mask;
-    i8 src_addr;
-    i8 dest_addr;
-    i16 data;
+    Node_Data data;
 } Timeslot_Info;
 
 typedef struct
@@ -86,6 +84,7 @@ static void _setup_clocks();
 static void _setup_pins();
 static void _recalc_rtc_derived_from_source();
 static void _clock_in_payload();
+static void _clock_out_payload();
 
 void frame_start();
 void frame_end();

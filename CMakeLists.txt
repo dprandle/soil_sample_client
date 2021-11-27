@@ -21,5 +21,9 @@ file(GLOB SRC_FILES
 # This will affect the TX frame timing so only do it to debug radio
 #add_definitions(-DRADIO_DEBUG_SPI)
 
+# Uncomment the line below to send packet RX to backchannel uart
+# This takes quite a bit of memory to do so just use it when needed
+#add_definitions(-DRADIO_DEBUG_RX_PACKET)
+
 msp430_add_executable(${TARGET_NAME} ${SRC_FILES})
 target_link_libraries(${TARGET_NAME} c gcc)
