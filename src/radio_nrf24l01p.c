@@ -10,24 +10,14 @@
 #define RADIO_UPDATE_TX_RX 0x01
 #define RADIO_UPDATE_SPI   0x02
 
-static Ring_Buffer rad_tx = {};
-static Ring_Buffer rad_rx = {};
+static volatile Ring_Buffer rad_tx = {};
+volatile Ring_Buffer rad_rx = {};
 
-static Packet_Callback rx_cback = 0;
-static Packet_Callback tx_cback = 0;
+static volatile Packet_Callback rx_cback = 0;
+static volatile Packet_Callback tx_cback = 0;
 
-typedef struct
-{
-    i8 command;
-    i8 expected;
-    i8 received;
-} Radio_Command;
-
-static Radio_Command small_queue[RADIO_MAX_QUEUE_SIZE];
-static i8 radio_command_ind = 0;
-static i8 radio_proccessed_ind = 0;
-static i8 do_update = 0;
-static i8 current_config = RADIO_NOT_CONFIGURED;
+static volatile i8 do_update = 0;
+static volatile i8 current_config = RADIO_NOT_CONFIGURED;
 
 void _spi_init()
 {
@@ -51,8 +41,8 @@ void _spi_init()
     UCB0CTLW0 &= ~UCSWRST;
 
     // Enable TX and RX interrupts, then clear the interrupt flags
-    UCB0IE |= (UCTXIE | UCRXIE);
-    UCB0IFG &= ~(UCTXIFG); // | UCRXIFG);
+    //UCB0IE |= (UCTXIE | UCRXIE);
+    //UCB0IFG &= ~(UCTXIFG); // | UCRXIFG);
 }
 
 void _pins_init()
@@ -106,17 +96,17 @@ void _pins_init()
     P1IFG &= ~BIT6;
 }
 
-void radio_clock_in(u8 * data, u8 size)
+void radio_clock_in(volatile const u8 * data, volatile u8 size)
 {
+    rb_write_byte(NRF24L01P_CMD_W_TX_PAYLOAD, &rad_tx);
     rb_write(data, size, &rad_tx);
-    radio_burst_spi_tx(NRF24L01P_CMD_W_TX_PAYLOAD);
+    radio_burst_spi_tx();
 }
 
-void radio_clock_out(u8 * data, u8 size)
+void radio_clock_out(volatile u8 * data, volatile u8 size)
 {
     radio_burst_spi_rx(NRF24L01P_CMD_R_RX_PAYLOAD, RADIO_PAYLOAD_SIZE);
-    for (u8 i = 0; i < size; ++i)
-        rb_read(data, size, &rad_rx);
+    rb_read(data, size, &rad_rx);
 }
 
 i8 radio_get_tx_or_rx()
@@ -124,7 +114,7 @@ i8 radio_get_tx_or_rx()
     return current_config;
 }
 
-void radio_set_pckt_rx_cb(Packet_Callback cback)
+void radio_set_pckt_rx_cb(volatile Packet_Callback cback)
 {
     rx_cback = cback;
 }
@@ -134,7 +124,7 @@ Packet_Callback radio_get_pckt_rx_cb()
     return rx_cback;
 }
 
-void radio_set_pckt_tx_cb(Packet_Callback cback)
+void radio_set_pckt_tx_cb(volatile Packet_Callback cback)
 {
     tx_cback = cback;
 }
@@ -144,13 +134,13 @@ Packet_Callback radio_get_pckt_tx_cb()
     return tx_cback;
 }
 
-void radio_configure(i8 tx_or_rx)
+i8 radio_configure(i8 tx_or_rx)
 {
     current_config = tx_or_rx;
     if (tx_or_rx)
-        radio_write_register(NRF24L01P_ADDR_CONFIG, NRF24L01P_EN_CRC | NRF24L01P_PWR_UP);
+        return radio_write_register(NRF24L01P_ADDR_CONFIG, NRF24L01P_EN_CRC | NRF24L01P_PWR_UP);
     else
-        radio_write_register(NRF24L01P_ADDR_CONFIG, NRF24L01P_EN_CRC | NRF24L01P_PWR_UP | NRF24L01P_PRIM_RX);
+        return radio_write_register(NRF24L01P_ADDR_CONFIG, NRF24L01P_EN_CRC | NRF24L01P_PWR_UP | NRF24L01P_PRIM_RX);
 }
 
 void radio_enable()
@@ -170,19 +160,20 @@ void radio_enable_pulse()
     P1OUT &= ~BIT3;
 }
 
-void radio_flush(i8 tx_or_rx)
+i8 radio_flush(i8 tx_or_rx)
 {
     i8 cmd = NRF24L01P_CMD_FLUSH_RX;
     if (tx_or_rx)
         cmd = NRF24L01P_CMD_FLUSH_TX;
 
     rb_write_byte(cmd, &rad_tx);
-    _add_command(cmd, 1);
+    radio_burst_spi_tx_rx();
+    return rb_read_byte(&rad_rx);
 }
 
-void radio_clear_interrupts()
+i8 radio_clear_interrupts()
 {
-    radio_write_register(NRF24L01P_ADDR_STATUS, NRF24L01P_RX_DR | NRF24L01P_TX_DS | NRF24L01P_MAX_RT);
+    return radio_write_register(NRF24L01P_ADDR_STATUS, NRF24L01P_RX_DR | NRF24L01P_TX_DS | NRF24L01P_MAX_RT);
 }
 
 void radio_init()
@@ -199,38 +190,52 @@ void radio_init()
     radio_clear_interrupts();
 
     // Set payload length for RX pipe 0 to 32 bytes
-    radio_write_register(NRF24L01P_ADDR_RX_PW_P0, RADIO_PAYLOAD_SIZE);
+    i8 ret1 = radio_write_register(NRF24L01P_ADDR_RX_PW_P0, RADIO_PAYLOAD_SIZE);
 
     // Turn off auto-retransmission
-    radio_write_register(NRF24L01P_ADDR_SETUP_RETR, 0);
+    i8 ret2 = radio_write_register(NRF24L01P_ADDR_SETUP_RETR, 0);
 
     // Turn off auto-ack for everything
-    radio_write_register(NRF24L01P_ADDR_EN_AA, 0);
+    i8 ret3 = radio_write_register(NRF24L01P_ADDR_EN_AA, 0);
 
     // Set the channel
-    radio_write_register(NRF24L01P_ADDR_RF_CH, RF_CHANNEL);
+    i8 ret4 = radio_write_register(NRF24L01P_ADDR_RF_CH, RF_CHANNEL);
+
+    bc_print("Set PL Width: ");
+    bc_print_byte(ret1,16);
+    bc_print("\n\rTurn of RETR: ");
+    bc_print_byte(ret2,16);
+    bc_print("\n\rDisable ENAA: ");
+    bc_print_byte(ret3,16);
+    bc_print("\n\rSet RF CH: ");
+    bc_print_byte(ret4,16);
+    bc_print("\n\r");
 }
 
-void radio_write_register(i8 regaddr, i8 byte)
+i8 radio_write_register(i8 regaddr, i8 byte)
 {
     rb_write_byte(NRF24L01P_CMD_W_REGISTER | regaddr, &rad_tx);
     rb_write_byte(byte, &rad_tx);
-    _add_command(NRF24L01P_CMD_W_REGISTER | regaddr, 2);
+    radio_burst_spi_tx_rx();
+    i8 ret = rb_read_byte(&rad_rx);
+    rb_flush(&rad_rx);
+    return ret;
 }
 
-void radio_write_register_data(i8 regaddr, i8 * data, i8 size)
+i8 radio_write_register_data(i8 regaddr, i8 * data, i8 size)
 {
     rb_write_byte(NRF24L01P_CMD_W_REGISTER | regaddr, &rad_tx);
     rb_write(data, size, &rad_tx);
-    _add_command(NRF24L01P_CMD_W_REGISTER | regaddr, size + 1);
+    radio_burst_spi_tx_rx();
+    i8 ret = rb_read_byte(&rad_rx);
+    rb_flush(&rad_rx);
+    return ret;
 }
 
-void radio_read_register(i8 regaddr, i8 nbytes)
+i8 radio_read_register(i8 regaddr, i8 nbytes)
 {
-    rb_write_byte(NRF24L01P_CMD_R_REGISTER | regaddr, &rad_tx);
-    for (int i = 0; i < nbytes; ++i)
-        rb_write_byte(NRF24L01P_CMD_NOP, &rad_tx);
-    _add_command(NRF24L01P_CMD_R_REGISTER | regaddr, nbytes + 1);
+    radio_burst_spi_rx(NRF24L01P_CMD_R_REGISTER | regaddr, nbytes);
+    return rb_bytes_available(&rad_rx);
 }
 
 void radio_update()
@@ -252,75 +257,55 @@ void radio_update()
             else
                 bc_print_crlf("No TX CB");
         }
-        radio_clear_interrupts();
-    }
-
+        i8 ret = radio_clear_interrupts();
 #ifdef RADIO_DEBUG_SPI
-    if ((do_update & RADIO_UPDATE_SPI) == RADIO_UPDATE_SPI)
-    {
-        do_update &= ~RADIO_UPDATE_SPI;
-        _print_rx_buf(16);
-    }
+        bc_print("CI: ");
+        bc_print_byte(ret, 16);
+        bc_print("\n\r");
 #endif
+    }
 }
 
-inline void _add_command(i8 cmd, i8 expected)
+static void radio_burst_spi_tx()
 {
-    small_queue[radio_command_ind].command = cmd;
-    small_queue[radio_command_ind].received = 0;
-    small_queue[radio_command_ind].expected = expected;
-
-    i8 should_send = (radio_command_ind == radio_proccessed_ind);
-    ++radio_command_ind;
-    if (radio_command_ind == RADIO_MAX_QUEUE_SIZE)
-        radio_command_ind = 0;
-
-    if (should_send)
-        _send_next();
-}
-
-inline void _send_next()
-{
-    P5OUT &= ~BIT0;
-    static i8 b = 0;
-    b = rad_tx.data[rad_tx.cur_ind];
-    ++rad_tx.cur_ind;
-    if (rad_tx.cur_ind == RING_BUFFER_SIZE)
-        rad_tx.cur_ind = 0;
-    UCB0TXBUF = b;
-}
-
-void radio_burst_spi_tx(i8 cmd_address)
-{
-    // Disable TX and RX interrupts
-    UCB0IE &= ~(UCTXIE | UCRXIE);
-
     // Set CSN to enable radio
     P5OUT &= ~BIT0;
 
-    // Write the command address
-    UCB0TXBUF = cmd_address;
-    while (!(UCB0IFG & UCTXIFG))
-        ;
-
     // While TX IFG is set and there is still data to send in the ring buffer, clear the TX interrupt flag
     // and send the next byte. Once no more data, this will end.
+    UCB0IFG &= ~UCRXIFG;
     while (rad_tx.cur_ind != rad_tx.end_ind)
     {
-        UCB0IFG &= ~(UCTXIFG | UCRXIFG);
-        _send_next();
+        UCB0IFG &= ~UCTXIFG;
+        UCB0TXBUF = rb_read_byte(&rad_tx);
         while (!(UCB0IFG & UCTXIFG))
             ;
     }
 
-    // Re-enable the interrupt flags, first clearing the TX flag - want to run the RX ISR so don't clear it
-    UCB0IFG &= ~(UCTXIFG);
-    UCB0IE |= (UCTXIE | UCRXIE);
-
-    // Wait until the last byte is done sending before changing CSN back. Essentially wait until the RX interrupt is run
-    // before putting the CSN back.
-    while (UCB0IFG & UCRXIFG)
+    UCB0IFG &= ~UCRXIFG;
+    while (!(UCB0IFG & UCRXIFG))
         ;
+
+    // Set CSN again to indicate we are done
+    P5OUT |= BIT0;
+}
+
+static void radio_burst_spi_tx_rx()
+{
+    // Set CSN to enable radio
+    P5OUT &= ~BIT0;
+
+    // While TX IFG is set and there is still data to send in the ring buffer, clear the TX interrupt flag
+    // and send the next byte. Once no more data, this will end.
+    UCB0IFG &= ~UCRXIFG;
+    while (rad_tx.cur_ind != rad_tx.end_ind)
+    {
+        UCB0TXBUF = rb_read_byte(&rad_tx);
+        while (!(UCB0IFG & UCRXIFG))
+            ;
+        rb_write_byte(UCB0RXBUF, &rad_rx);
+        UCB0IFG &= ~UCRXIFG;
+    }
 
     // Set CSN again to indicate we are done
     P5OUT |= BIT0;
@@ -328,54 +313,33 @@ void radio_burst_spi_tx(i8 cmd_address)
 
 void radio_burst_spi_rx(i8 cmd_address, i8 nbytes)
 {
-    // Disable TX and RX interrupts
-    UCB0IE &= ~(UCTXIE | UCRXIE);
-
     // Set CSN to enable radio
     P5OUT &= ~BIT0;
 
-    // Write the command address
-    UCB0TXBUF = cmd_address;
-    while (!(UCB0IFG & UCRXIFG))
-        ;
-
     // While RX IFG is set and we haven't reached nbytes yet, clear the RX interrupt flag
     // and send the next byte. Once no more data, this will end.
-    while (nbytes)
+    i8 np1_bytes = nbytes + 1;
+
+    UCB0IFG &= ~UCRXIFG;
+    while (np1_bytes)
     {
-        UCB0IFG &= ~(UCTXIFG | UCRXIFG);
-        UCB0TXBUF = NRF24L01P_CMD_NOP;
+        // First time, use cmd address, fromcg then on use NOP
+        UCB0TXBUF = cmd_address;
         while (!(UCB0IFG & UCRXIFG))
             ;
-        rb_write_byte(UCB0RXBUF, &rad_rx);
-        --nbytes;
-    }
 
-    // Re-enable the interrupt flags clear them first
-    UCB0IFG &= ~(UCTXIFG | UCTXIFG);
-    UCB0IE |= (UCTXIE | UCRXIE);
+        if (np1_bytes <= nbytes)
+            rb_write_byte(UCB0RXBUF, &rad_rx);
+        else
+            cmd_address = NRF24L01P_CMD_NOP;
+
+        UCB0IFG &= ~UCRXIFG;
+        --np1_bytes;
+    }
 
     // Set CSN again to indicate we are done
     P5OUT |= BIT0;
 }
-
-#ifdef RADIO_DEBUG_SPI
-inline void _print_rx_buf(i8 base)
-{
-    while (rad_rx.cur_ind != rad_rx.end_ind)
-    {
-        if (base)
-            bc_print_byte(rad_rx.data[rad_rx.cur_ind], base);
-        else
-            bc_print_raw(rad_rx.data[rad_rx.cur_ind]);
-        bc_print_raw(' ');
-        ++rad_rx.cur_ind;
-        if (rad_rx.cur_ind == RING_BUFFER_SIZE)
-            rad_rx.cur_ind = 0;
-    }
-    bc_print("\r\n");
-}
-#endif
 
 __interrupt_vec(PORT1_VECTOR) void port_2_isr()
 {
@@ -397,48 +361,9 @@ __interrupt_vec(PORT1_VECTOR) void port_2_isr()
         break;
     case (P1IV_P1IFG6):
         do_update |= RADIO_UPDATE_TX_RX;
-        P1OUT &= ~BIT4;
         LPM4_EXIT;
         break;
     case (P1IV_P1IFG7):
-        break;
-    default:
-        break;
-    }
-}
-
-__interrupt_vec(USCI_B0_VECTOR) void spi_isr()
-{
-    char buff[3];
-    static i8 b = 0;
-    switch (UCB0IV)
-    {
-    case (USCI_NONE):
-        break;
-    case (USCI_SPI_UCRXIFG):
-        b = UCB0RXBUF;
-        if (small_queue[radio_proccessed_ind].expected != small_queue[radio_proccessed_ind].received)
-        {
-#ifdef RADIO_DEBUG_SPI
-            rb_write_byte(b, &rad_rx);
-#endif
-            ++small_queue[radio_proccessed_ind].received;
-            if (small_queue[radio_proccessed_ind].received == small_queue[radio_proccessed_ind].expected)
-            {
-                P5OUT |= BIT0;
-                ++radio_proccessed_ind;
-                if (radio_proccessed_ind == RADIO_MAX_QUEUE_SIZE)
-                    radio_proccessed_ind = 0;
-#ifdef RADIO_DEBUG_SPI
-                do_update |= RADIO_UPDATE_SPI;
-                LPM4_EXIT;
-#endif
-            }
-        }
-        if (rad_tx.cur_ind != rad_tx.end_ind)
-            _send_next();
-        break;
-    case (USCI_SPI_UCTXIFG):
         break;
     default:
         break;

@@ -3,8 +3,10 @@
 #include "typedefs.h"
 
 #define MAX_NODE_HOPS   5
-#define PACKET_PAYLOAD  32
-#define CRYSTAL_PPM     20
+#define PACKET_PAYLOAD_BYTE_SIZE  32
+#define DATARATE 2000000
+#define PACKET_BYTE_SIZE  39
+#define CRYSTAL_PPM     40
 #define CRYSTAL_FREQ    32768
 #define ROUND_THRESHOLD 0.75
 #define MAX_TIMESLOTS_PER_FRAME 32
@@ -31,7 +33,7 @@ typedef union
         Node_Data data;
         Node_Data fwd[MAX_NODE_HOPS];
     };
-    char raw_data[PACKET_PAYLOAD];
+    char raw_data[PACKET_PAYLOAD_BYTE_SIZE];
 } Timeslot_Packet;
 
 typedef struct
@@ -58,7 +60,9 @@ typedef struct
     u16 timeslot;
     u8 settle;
     u8 listen;
-    u8 frame_extra_listen;
+    u8 drift_listen;
+    u8 frame_extra_drift_listen;
+    u8 tx_to_rx_measured_delay;
 } RTC_Cycle_Source;
 
 typedef struct
@@ -81,19 +85,20 @@ typedef struct
     Frame_Info cur_frame;
 } Node_Control;
 
-static void _setup_rtc();
 static void _setup_clocks();
 static void _setup_pins();
+
+#ifndef RADIO_DEBUG_SPI
 static void _recalc_rtc_derived_from_source();
+static void _setup_rtc();
 static void _clock_in_payload();
 static void _clock_out_payload();
-
 void frame_start();
 void frame_end();
 void frame_rx_timeslot_end();
 void frame_rx_timeslot_begin();
 void frame_tx_timeslot();
-
+#endif
 
 void node_control_init();
 void node_control_run();

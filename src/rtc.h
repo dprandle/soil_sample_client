@@ -5,7 +5,7 @@
 extern const i8 RTC_MODE_REPEAT;
 extern const i8 RTC_MODE_ONE_SHOT;
 
-extern u8 toggel_pin_next_isr;
+extern volatile u8 toggel_pin_next_isr;
 
 typedef void (*RTC_Callback)(void);
 

@@ -1,4 +1,5 @@
 #include <msp430.h>
+#include <string.h>
 #include <stdlib.h>
 
 #include "radio_nrf24l01p.h"
@@ -6,10 +7,10 @@
 
 #define COMMAND_SIZE 2
 
-Ring_Buffer bc_tx = {};
-Ring_Buffer bc_rx = {};
+volatile Ring_Buffer bc_tx = {};
+volatile Ring_Buffer bc_rx = {};
 
-void (*CHECK_FOR_COMMAND_FUNC)(void) = 0;
+volatile void (*CHECK_FOR_COMMAND_FUNC)(void) = 0;
 
 #ifndef RADIO_DEBUG_SPI
 #define COMMAND_COUNT 1
@@ -38,180 +39,271 @@ void (*COMMAND_FUNC[COMMAND_COUNT])(void) = {
     _radio_get_features,          _radio_get_fifo_status,          _radio_get_packet_stats,         _radio_get_rx_power,
     _radio_toggle_enable};
 
+const char * debug_tmr_packet = "abcdefghijklmnopqrstuvwxyz[];',.";
+char debug_rcv_packet[RADIO_PAYLOAD_SIZE] = {};
+
+void tx_packet_sent()
+{
+    bc_print_crlf("Packet Sent");
+    P1OUT &= ~BIT4;
+}
+
+void rx_packet_rcvd()
+{
+    bc_print_crlf("Packet Received");
+    bzero(debug_rcv_packet, RADIO_PAYLOAD_SIZE);
+    radio_clock_out(debug_rcv_packet, RADIO_PAYLOAD_SIZE);
+    bc_print_crlf(debug_rcv_packet);
+}
+
+
 void _radio_clear_interrupts()
 {
-    bc_print_crlf("ClearInts");
-    radio_write_register(NRF24L01P_ADDR_STATUS, NRF24L01P_RX_DR | NRF24L01P_TX_DS | NRF24L01P_MAX_RT);
+    bc_print("ClearInts: ");    
+    i8 ret = radio_write_register(NRF24L01P_ADDR_STATUS, NRF24L01P_RX_DR | NRF24L01P_TX_DS | NRF24L01P_MAX_RT);
+    bc_print_byte(ret,16);
+    bc_print("\n\r");
 }
 
 void _radio_set_config_power_up_rx()
 {
-    bc_print_crlf("RX Mode");
-    radio_write_register(NRF24L01P_ADDR_CONFIG, NRF24L01P_EN_CRC | NRF24L01P_PWR_UP | NRF24L01P_PRIM_RX);
+    radio_set_pckt_rx_cb(rx_packet_rcvd);
+    bc_print("RX Mode: ");
+    i8 ret = radio_configure(RADIO_RX);
+    bc_print_byte(ret,16);
+    bc_print("\n\r");
+
 }
 
 void _radio_set_config_power_up_tx()
 {
-    bc_print_crlf("TX Mode");
-    radio_write_register(NRF24L01P_ADDR_CONFIG, NRF24L01P_EN_CRC | NRF24L01P_PWR_UP);
+    radio_set_pckt_tx_cb(tx_packet_sent);
+    bc_print("TX Packet: ");
+    i8 ret = radio_configure(RADIO_TX);
+    bc_print_byte(ret,16);
+    bc_print("\n\r");
+    radio_clock_in(debug_tmr_packet, RADIO_PAYLOAD_SIZE);
+    radio_enable_pulse();
 }
 
 void _radio_get_config()
 {
-    bc_print_crlf("Get CFG");
+    bc_print("Get CFG: ");
     radio_read_register(NRF24L01P_ADDR_CONFIG, 1);
+    bc_print_byte(rb_read_byte(&rad_rx),16);
+    bc_print("\n\r");
 }
 
 void _radio_set_freq_channel()
 {
-    P1OUT &= ~BIT3;
-    bc_print_crlf("Set CH");
-    radio_write_register(NRF24L01P_ADDR_RF_CH, 101);
+    bc_print("Set CH: ");
+    i8 ret = radio_write_register(NRF24L01P_ADDR_RF_CH, 101);
+    bc_print_byte(ret,16);
+    bc_print("\n\r");
+
 }
 
 void _radio_get_freq_channel()
 {
-    bc_print_crlf("Get CH");
+    bc_print("Get CH: ");
     radio_read_register(NRF24L01P_ADDR_RF_CH, 1);
+    bc_print_byte(rb_read_byte(&rad_rx),16);
+    bc_print("\n\r");
+
 }
 
 void _radio_set_rf_setup_normal()
 {
-    P1OUT &= ~BIT3;
-    bc_print_crlf("Setup RF");
-    radio_write_register(NRF24L01P_ADDR_RF_SETUP, NRF24L01P_RF_PWR_3);
+    bc_print("Setup RF: ");
+    i8 ret = radio_write_register(NRF24L01P_ADDR_RF_SETUP, NRF24L01P_RF_PWR_3);
+    bc_print_byte(ret,16);
+    bc_print("\n\r");
+
 }
 
 void _radio_set_rf_setup_carrier()
 {
-    bc_print_crlf("CW");
-    radio_write_register(NRF24L01P_ADDR_RF_SETUP, NRF24L01P_CONT_WAVE | NRF24L01P_PLL_LOCK | NRF24L01P_RF_PWR_3);
+    bc_print("CW: ");
+    i8 ret = radio_write_register(NRF24L01P_ADDR_RF_SETUP, NRF24L01P_CONT_WAVE | NRF24L01P_PLL_LOCK | NRF24L01P_RF_PWR_3);
+    bc_print_byte(ret,16);
+    bc_print("\n\r");
+
 }
 
 void _radio_get_rf_setup()
 {
-    bc_print_crlf("Get RF");
+    bc_print("Get RF: ");
     radio_read_register(NRF24L01P_ADDR_RF_SETUP, 1);
+    bc_print_byte(rb_read_byte(&rad_rx),16);
+    bc_print("\n\r");
 }
 
 void _radio_set_retransmission()
 {
-    bc_print_crlf("Set ARETR");
-    radio_write_register(NRF24L01P_ADDR_SETUP_RETR, NRF24L01P_ARD_500 | 10);
+    bc_print("Set ARETR: ");
+    i8 ret = radio_write_register(NRF24L01P_ADDR_SETUP_RETR, NRF24L01P_ARD_500 | 10);
+    bc_print_byte(ret,16);
+    bc_print("\n\r");
+
 }
 
 void _radio_get_retransmission()
 {
-    bc_print_crlf("Get ARETR");
+    bc_print("Get ARETR: ");
     radio_read_register(NRF24L01P_ADDR_SETUP_RETR, 1);
+    bc_print_byte(rb_read_byte(&rad_rx),16);
+    bc_print("\n\r");
 }
 
 void _radio_set_address_width()
 {
-    bc_print_crlf("Set AddrW");
-    radio_write_register(NRF24L01P_ADDR_SETUP_RETR, NRF24L01P_AW_3);
+    bc_print("Set AddrW: ");
+    i8 ret = radio_write_register(NRF24L01P_ADDR_SETUP_RETR, NRF24L01P_AW_3);
+    bc_print_byte(ret,16);
+    bc_print("\n\r");
+
 }
 
 void _radio_get_address_width()
 {
-    bc_print_crlf("Get AddrW");
+    bc_print("Get AddrW: ");
     radio_read_register(NRF24L01P_ADDR_SETUP_RETR, 1);
+    bc_print_byte(rb_read_byte(&rad_rx),16);
+    bc_print("\n\r");
 }
 
 void _radio_set_rx_pipe_enable()
 {
-    bc_print_crlf("Set PipeEn");
-    radio_write_register(NRF24L01P_ADDR_EN_RXADDR, NRF24L01P_ERX_P0);
+    bc_print("Set PipeEn: ");
+    i8 ret = radio_write_register(NRF24L01P_ADDR_EN_RXADDR, NRF24L01P_ERX_P0);
+    bc_print_byte(ret,16);
+    bc_print("\n\r");
+
 }
 
 void _radio_get_rx_pipe_enable()
 {
-    bc_print_crlf("Get PipeEn");
+    bc_print("Get PipeEn: ");
     radio_read_register(NRF24L01P_ADDR_EN_RXADDR, 1);
+    bc_print_byte(rb_read_byte(&rad_rx),16);
+    bc_print("\n\r");
 }
 
 void _radio_set_rx_pipe_0_address()
 {
-    bc_print_crlf("Set P0 Addr");
-    radio_write_register_data(NRF24L01P_ADDR_RX_ADDR_P0, "node1", 5);
+    bc_print("Set P0 Addr: ");
+    i8 ret = radio_write_register_data(NRF24L01P_ADDR_RX_ADDR_P0, "node1", 5);
+    bc_print_byte(ret,16);
+    bc_print("\n\r");
+
 }
 
 void _radio_get_rx_pipe_0_address()
 {
-    bc_print_crlf("Get P0 Addr");
+    bc_print("Get P0 Addr: ");
     radio_read_register(NRF24L01P_ADDR_RX_ADDR_P0, 5);
+    for (int i = 0; i < 5; ++i)
+        bc_print_byte(rb_read_byte(&rad_rx),16);
+    bc_print("\n\r");
 }
 
 void _radio_set_tx_address()
 {
-    bc_print_crlf("Set TX Addr");
-    radio_write_register_data(NRF24L01P_ADDR_TX_ADDR, "node1", 5);
+    bc_print("Set TX Addr: ");
+    i8 ret = radio_write_register_data(NRF24L01P_ADDR_TX_ADDR, "node1", 5);
+    bc_print_byte(ret,16);
+    bc_print("\n\r");
+
 }
 
 void _radio_get_tx_address()
 {
-    bc_print_crlf("Get TX Addr");
+    bc_print("Get TX Addr: ");
     radio_read_register(NRF24L01P_ADDR_TX_ADDR, 5);
+    for (int i = 0; i < 5; ++i)
+        bc_print_byte(rb_read_byte(&rad_rx),16);
+    bc_print("\n\r");
 }
 
 void _radio_set_auto_ack()
 {
-    bc_print_crlf("Set AA");
-    radio_write_register(NRF24L01P_ADDR_EN_AA, NRF24L01P_ENAA_P0);
+    bc_print("Set AA: ");
+    i8 ret = radio_write_register(NRF24L01P_ADDR_EN_AA, NRF24L01P_ENAA_P0);
+    bc_print_byte(ret,16);
+    bc_print("\n\r");
+
 }
 
 void _radio_get_auto_ack()
 {
-    bc_print_crlf("Get AA");
+    bc_print("Get AA: ");
     radio_read_register(NRF24L01P_ADDR_EN_AA, 1);
+    bc_print_byte(rb_read_byte(&rad_rx),16);
+    bc_print("\n\r");
 }
 
 void _radio_set_pipe_dynamic_payload()
 {
-    bc_print_crlf("Set DynP");
-    radio_write_register(NRF24L01P_ADDR_DYNPD, 0);
+    bc_print("Set DynP: ");
+    i8 ret = radio_write_register(NRF24L01P_ADDR_DYNPD, 0);
+    bc_print_byte(ret,16);
+    bc_print("\n\r");
+
 }
 
 void _radio_get_pipe_dynamic_payload()
 {
-    bc_print_crlf("Get DynP");
+    bc_print("Get DynP: ");
     radio_read_register(NRF24L01P_ADDR_DYNPD, 1);
+    bc_print_byte(rb_read_byte(&rad_rx),16);
+    bc_print("\n\r");
 }
 
 void _radio_set_features()
 {
-    bc_print_crlf("Set Feat");
-    radio_write_register(NRF24L01P_ADDR_FEATURE, 0);
+    bc_print("Set Feat: ");
+    i8 ret = radio_write_register(NRF24L01P_ADDR_FEATURE, 0);
+    bc_print_byte(ret,16);
+    bc_print("\n\r");
+
 }
 
 void _radio_get_features()
 {
-    bc_print_crlf("Get Feat");
+    bc_print("Get Feat: ");
     radio_read_register(NRF24L01P_ADDR_FEATURE, 1);
+    bc_print_byte(rb_read_byte(&rad_rx),16);
+    bc_print("\n\r");
 }
 
 void _radio_get_fifo_status()
 {
-    bc_print_crlf("Get FIFO_St");
+    bc_print("Get FIFO_St: ");
     radio_read_register(NRF24L01P_ADDR_FIFO_STATUS, 1);
+    bc_print_byte(rb_read_byte(&rad_rx),16);
+    bc_print("\n\r");
 }
 
 void _radio_get_packet_stats()
 {
-    bc_print_crlf("Get PcktSts");
+    bc_print("Get PcktSts: ");
     radio_read_register(NRF24L01P_ADDR_OBSERVE_TX, 1);
+    bc_print_byte(rb_read_byte(&rad_rx),16);
+    bc_print("\n\r");
 }
 
 void _radio_get_rx_power()
 {
-    bc_print_crlf("Get RxPwr");
+    bc_print("Get RxPwr: ");
     radio_read_register(NRF24L01P_ADDR_RPD, 1);
+    bc_print_byte(rb_read_byte(&rad_rx),16);
+    bc_print("\n\r");
 }
 
 void _radio_toggle_enable()
 {
     P1OUT ^= BIT3;
-    if (P1OUT & BIT3 == BIT3)
+    if ((P1OUT & BIT3) == BIT3)
         bc_print_crlf("Enabled");
     else
         bc_print_crlf("Disabled");
@@ -235,8 +327,8 @@ void _uart_init()
     UCA0CTLW0 &= ~UCSWRST;
 
     // Enable TX and RX interrupts
-    UCA0IE = UCRXIE | UCTXIE;
-    UCA0IFG &= ~(UCRXIFG | UCTXIFG);
+    UCA0IFG &= ~UCRXIFG;
+    UCA0IE = UCRXIE;
 }
 
 void _pin_init()
@@ -273,34 +365,30 @@ void bc_print_crlf(const char * str)
 
 void bc_print(const char * str)
 {
-    i8 cnt = rb_write_str(str, &bc_tx);
-    if (cnt == rb_bytes_available(&bc_tx))
-        _send_next();
+    rb_write_str(str, &bc_tx);
+    _transmit_burst();
 }
 
 void bc_print_byte(i8 byte, i8 base)
 {
     i8 buf[8];
     itoa(byte, buf, base);
-    i8 cnt = rb_write_str(buf, &bc_tx);
-    if (cnt == rb_bytes_available(&bc_tx))
-        _send_next();
+    rb_write_str(buf, &bc_tx);
+    _transmit_burst();
 }
 
 void bc_print_int(i16 byte, i8 base)
 {
     i8 buf[16];
     itoa(byte, buf, base);
-    i8 cnt = rb_write_str(buf, &bc_tx);
-    if (cnt == rb_bytes_available(&bc_tx))
-        _send_next();
+    rb_write_str(buf, &bc_tx);
+    _transmit_burst();
 }
 
 void bc_print_raw(i8 byte)
 {
-    rb_write(&byte, 1, &bc_tx);
-    if (rb_bytes_available(&bc_tx) == 1)
-        _send_next();
+    rb_write_byte(byte, &bc_tx);
+    _transmit_burst();
 }
 
 void _check_command()
@@ -343,19 +431,22 @@ void _check_command()
     }
 }
 
-inline void _send_next()
+static void _transmit_burst()
 {
-    static i8 b = 0;
-    b = bc_tx.data[bc_tx.cur_ind];
-    ++bc_tx.cur_ind;
-    if (bc_tx.cur_ind == RING_BUFFER_SIZE)
-        bc_tx.cur_ind = 0;
-    UCA0TXBUF = b;
+    // While TX IFG is set and there is still data to send in the ring buffer, clear the TX interrupt flag
+    // and send the next byte. Once no more data, this will end.
+    while (bc_tx.cur_ind != bc_tx.end_ind)
+    {
+        UCA0IFG &= ~UCTXIFG;
+        UCA0TXBUF = rb_read_byte(&bc_tx);
+        while (!(UCA0IFG & UCTXIFG))
+            ;
+    }
 }
 
 __interrupt_vec(USCI_A0_VECTOR) void uart_backchannel_ISR(void)
 {
-    i8 byte = 0;
+    volatile i8 byte = 0;
     switch (UCA0IV)
     {
     case (USCI_NONE):
@@ -377,8 +468,6 @@ __interrupt_vec(USCI_A0_VECTOR) void uart_backchannel_ISR(void)
         }
         break;
     case (USCI_UART_UCTXIFG):
-        if (bc_tx.cur_ind != bc_tx.end_ind)
-            _send_next();
         break;
     case (USCI_UART_UCSTTIFG):
         break;

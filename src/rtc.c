@@ -4,20 +4,20 @@
 const i8 RTC_MODE_REPEAT = 0;
 const i8 RTC_MODE_ONE_SHOT = 1;
 
-static RTC_Callback cback = 0;
-static i8 timer_triggered = 0;
 static i8 timer_mode = RTC_MODE_REPEAT;
-static i16 interrupt_tick_count = 0;
-static i16 current_tick_count = 0;
 
-u8 toggel_pin_next_isr = 0;
+static volatile i8 timer_triggered = 0;
+static volatile i16 interrupt_tick_count = 0;
+static volatile RTC_Callback cback = 0;
+static volatile i16 current_tick_count = 0;
+volatile u8 toggel_pin_next_isr = 0;
 
 void rtc_init()
 {
     // Select XT1CLK as source - our external oscillator - the most accurate thing we have available
     // Enable interrupt
-    rtc_stop();
-    rtc_reset();
+    // rtc_stop();
+    // rtc_reset();
     i8 dummy_read = RTCIV;
     RTCCTL |= RTCIE;
 }
@@ -43,9 +43,18 @@ void rtc_set_cb(RTC_Callback callback)
 
 void rtc_start()
 {
+    // Disable interrupts
+    RTCCTL &= ~RTCIE;
+
     // First clear the bits, then set the right ones
     RTCCTL &= ~RTCSS_3;
     RTCCTL |= RTCSS_2;
+
+    // Read to clear any flags
+    i8 dummy_read = RTCIV;
+
+    // Re-enable interrupts
+    RTCCTL |= RTCIE;
 }
 
 void rtc_stop()
@@ -100,7 +109,11 @@ i8 rtc_get_mode()
 
 __interrupt_vec(RTC_VECTOR) void rtc_isr(void)
 {
-    i8 dummyread = RTCIV;
+    //P1OUT ^= BIT5;
+    //_EINT();
+    // P1OUT ^= BIT4;
+    // P1OUT ^= BIT4;
+    volatile i8 dummyread = RTCIV;
     if (toggel_pin_next_isr)
     {
         P1OUT ^= BIT5;

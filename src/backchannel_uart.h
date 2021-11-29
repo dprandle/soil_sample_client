@@ -3,8 +3,8 @@
 #include "typedefs.h"
 #include "ring_buffer.h"
 
-extern Ring_Buffer bc_tx;
-extern Ring_Buffer bc_rx;
+extern volatile Ring_Buffer bc_tx;
+extern volatile Ring_Buffer bc_rx;
 
 void bc_init();
 
@@ -20,6 +20,8 @@ void bc_print_int(i16 byte, i8 base);
 
 void bc_print_raw(i8 byte);
 
+static void _transmit_burst();
+
 static void _check_command();
 
 static void _uart_init();
@@ -27,8 +29,6 @@ static void _uart_init();
 static void _pin_init();
 
 static inline void _sample_func();
-
-static inline void _send_next();
 
 #ifdef RADIO_DEBUG_SPI
 static void _radio_clear_interrupts();

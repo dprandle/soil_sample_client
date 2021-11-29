@@ -194,53 +194,56 @@
 
 typedef void (*Packet_Callback)(void);
 
+typedef struct
+{
+    u8 status;
+    u8 reg;
+} Read_Reg_Result;
+
+extern volatile Ring_Buffer rad_rx;
+
 void radio_init();
 
 void radio_update();
 
-void radio_configure(i8 tx_or_rx);
-
-i8 radio_get_tx_or_rx();
-
 void radio_enable();
-
-void radio_disable();
-
-void radio_clock_in(u8 * data, u8 size);
-
-void radio_clock_out(u8 * data, u8 size);
 
 void radio_enable_pulse();
 
-void radio_clear_interrupts();
+void radio_disable();
 
-void radio_set_pckt_rx_cb(Packet_Callback cback);
+i8 radio_configure(i8 tx_or_rx);
+
+i8 radio_get_tx_or_rx();
+
+i8 radio_clear_interrupts();
+
+i8 radio_flush(i8 tx_or_rx);
+
+i8 radio_write_register(i8 regaddr, i8 byte);
+
+i8 radio_write_register_data(i8 regaddr, i8 * data, i8 size);
+
+i8 radio_read_register(i8 regaddr, i8 nbytes);
+
+void radio_clock_in(volatile const u8 * data, volatile u8 size);
+
+void radio_clock_out(volatile u8 * data, volatile u8 size);
+
+void radio_set_pckt_rx_cb(volatile Packet_Callback cback);
 
 Packet_Callback radio_get_pckt_rx_cb();
 
-void radio_set_pckt_tx_cb(Packet_Callback cback);
+void radio_set_pckt_tx_cb(volatile Packet_Callback cback);
 
 Packet_Callback radio_get_pckt_tx_cb();
 
-/// 1 for TX and 0 for RX
-void radio_flush(i8 tx_or_rx);
 
-/// Transmit all data pending in rad_tx as fast as possible, ignoring
-/// all RX bytes shifted back
-void radio_burst_spi_tx(i8 cmd_address);
+static void radio_burst_spi_tx();
 
-/// Get nbytes as fast as possible, by polling the rx register
-void radio_burst_spi_rx(i8 cmd_address, i8 nbytes);
+static void radio_burst_spi_rx(volatile i8 cmd_address, volatile i8 nbytes);
 
-void radio_write_register_data(i8 regaddr, i8 * data, i8 size);
-
-void radio_write_register(i8 regaddr, i8 byte);
-
-void radio_read_register(i8 regaddr, i8 nbytes);
-
-static inline void _add_command(i8 cmd, i8 expected);
-
-static inline void _send_next();
+static void radio_burst_spi_tx_rx();
 
 static void _spi_init();
 
