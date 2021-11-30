@@ -6,7 +6,7 @@
 #define PACKET_PAYLOAD_BYTE_SIZE  32
 #define DATARATE 2000000
 #define PACKET_BYTE_SIZE  39
-#define CRYSTAL_PPM     40
+#define CRYSTAL_PPM     20
 #define CRYSTAL_FREQ    32768
 #define ROUND_THRESHOLD 0.75
 #define MAX_TIMESLOTS_PER_FRAME 32
@@ -62,6 +62,7 @@ typedef struct
     u8 listen;
     u8 drift_listen;
     u8 frame_extra_drift_listen;
+    u8 packet_listen;
     u8 tx_to_rx_measured_delay;
 } RTC_Cycle_Source;
 
@@ -93,6 +94,8 @@ static void _recalc_rtc_derived_from_source();
 static void _setup_rtc();
 static void _clock_in_payload();
 static void _clock_out_payload();
+static void _set_short_listen();
+static void _set_long_listen();
 void frame_start();
 void frame_end();
 void frame_rx_timeslot_end();

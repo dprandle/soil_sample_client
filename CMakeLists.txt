@@ -19,7 +19,7 @@ file(GLOB SRC_FILES
 
 # Uncomment the line below to allow manual commands and command feedback to show on BC Uart
 # This will affect the TX frame timing so only do it to debug radio
-add_definitions(-DRADIO_DEBUG_SPI)
+# add_definitions(-DRADIO_DEBUG_SPI)
 
 # Uncomment the line below to send packet RX to backchannel uart
 # This takes quite a bit of memory to do so just use it when needed

@@ -29,7 +29,7 @@ void rtc_update()
         if (timer_mode == RTC_MODE_ONE_SHOT)
         {
             rtc_stop();
-            rtc_reset();
+            //rtc_reset();
         }
         timer_triggered = 0;
         cback();
@@ -109,10 +109,6 @@ i8 rtc_get_mode()
 
 __interrupt_vec(RTC_VECTOR) void rtc_isr(void)
 {
-    //P1OUT ^= BIT5;
-    //_EINT();
-    // P1OUT ^= BIT4;
-    // P1OUT ^= BIT4;
     volatile i8 dummyread = RTCIV;
     if (toggel_pin_next_isr)
     {
