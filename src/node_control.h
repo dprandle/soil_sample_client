@@ -58,7 +58,6 @@ typedef struct
 typedef struct
 {
     u16 timeslot;
-    //u8 settle;
     u8 listen;
     u8 drift_listen;
     u8 frame_extra_drift_listen;

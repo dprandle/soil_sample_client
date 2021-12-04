@@ -376,8 +376,8 @@ void turn_rx_off()
 
 static void _set_short_listen()
 {
-    //nctrl.src_t.listen = nctrl.src_t.packet_listen + nctrl.src_t.drift_listen;
-    //_recalc_rtc_derived_from_source();
+    nctrl.src_t.listen = nctrl.src_t.packet_listen + nctrl.src_t.drift_listen;
+    _recalc_rtc_derived_from_source();
 }
 
 static void _set_long_listen()
@@ -407,8 +407,7 @@ static void _setup_rtc()
     nctrl.sleep_frame_count = 20;
 
     nctrl.src_t.timeslot = CRYSTAL_FREQ / 8; // 125 ms
-    //nctrl.src_t.settle = 5;                  // 152.59 uS
-    nctrl.src_t.tx_to_rx_measured_delay = 15;
+    nctrl.src_t.tx_to_rx_measured_delay = 15; // DONT FREAKING CHANGE THIS NUMBER
 
     double exact_calc = CRYSTAL_PPM * 0.000001 * nctrl.src_t.timeslot * nctrl.timeslots_per_frame;
     double pckt_oa = ((double)(PACKET_BYTE_SIZE * 8) / 2000000) * CRYSTAL_FREQ;
@@ -469,7 +468,6 @@ void node_control_init()
     bc_print("\n\rRX_ON:");
     bc_print_int(nctrl.t.rx_on, 10);
     bc_print("\n\r");
-
     bc_print_crlf("\n\rInitialized");
 }
 
