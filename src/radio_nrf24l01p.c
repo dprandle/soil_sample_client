@@ -94,6 +94,12 @@ void _pins_init()
     P1OUT |= BIT6;
     P1IE |= BIT6;
     P1IFG &= ~BIT6;
+
+    // Setup P1.7 as radio power
+    SYSCFG2 &= ~ADCPCTL7;
+    P1SEL0 &= ~BIT7;
+    P1DIR |= BIT7;
+    P1OUT |= BIT7;
 }
 
 void radio_clock_in(volatile const u8 * data, volatile u8 size)

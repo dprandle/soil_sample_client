@@ -38,7 +38,8 @@
             "id": "selected_board",
             "options": [
                 "/dev/ttyACM0",
-                "/dev/ttyACM2"
+                "/dev/ttyACM2",
+                "/dev/ttyACM4"
             ],
             "default": "/dev/ttyACM0"
         }

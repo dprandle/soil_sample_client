@@ -23,7 +23,7 @@ void _clock_in_payload()
     pckt.data.dest_addr = OUR_TIMESLOT_DATA.data.dest_addr;
     pckt.data.data = 55;
     radio_clock_in(pckt.raw_data, RADIO_PAYLOAD_SIZE);
-//    bc_print_crlf("TX Packet");
+    //    bc_print_crlf("TX Packet");
 }
 
 void _clock_out_payload()
@@ -44,19 +44,19 @@ void _clock_out_payload()
         nctrl.total_node_count = pckt.total_node_count;
 
     ++nctrl.cur_frame.cur_timeslot;
-//    bc_print_crlf("RX Packet");
+    //    bc_print_crlf("RX Packet");
 }
 
 void tx_packet_sent()
 {
     P1OUT &= ~BIT4;
     radio_configure(RADIO_RX);
-    bc_print_byte(nctrl.cur_frame.cur_timeslot-1, 10);
+    bc_print_byte(nctrl.cur_frame.cur_timeslot - 1, 10);
     bc_print_crlf(" TX");
 }
 
 void frame_start()
-{    
+{
     ++nctrl.cur_frame.cur_timeslot;
     //bc_print_int(rtc_get_tick_cycles(),10);
     if (nctrl.cur_frame.cur_timeslot == nctrl.cur_frame.our_timeslot)
@@ -106,11 +106,11 @@ void frame_end()
             // Set the first occupied slot so we know where to search after... we can't try to take a node before this because
             // we may have started up in the middle of the frame (however unlikely)
             if (!first_occupied && nctrl.cur_frame.timeslots[i].timeslot_mask)
-                first_occupied = i+1;
-            
+                first_occupied = i + 1;
+
             // Or the occupied timeslot masks of the other nodes in our neighborhood - the gives me the occupied timeslots within 2 hops
             occupied_mask |= nctrl.cur_frame.timeslots[i].timeslot_mask;
-            
+
             // Set the bit in my occupied mask - this is basically the nodes in my immediate neighborhood
             if (nctrl.cur_frame.timeslots[i].timeslot_mask)
                 my_occupied_mask |= (0x0001 << i);
@@ -122,13 +122,13 @@ void frame_end()
         {
             if (!((occupied_mask >> i) & 0x0001))
             {
-                first_open = i+1;
+                first_open = i + 1;
                 break;
             }
         }
         nctrl.cur_frame.our_timeslot = first_open;
-        OUR_TIMESLOT_DATA.timeslot_mask = my_occupied_mask | (0x0001 << (nctrl.cur_frame.our_timeslot-1));
-        
+        OUR_TIMESLOT_DATA.timeslot_mask = my_occupied_mask | (0x0001 << (nctrl.cur_frame.our_timeslot - 1));
+
         // Increment the node count and set our address
         ++nctrl.total_node_count;
         OUR_TIMESLOT_DATA.data.src_addr = nctrl.total_node_count;
@@ -172,19 +172,22 @@ void _rx_end_next_frame_end()
     rtc_set_tick_cycles(nctrl.t.timeslot);
 }
 
+i8 tick_count = 0;
 void _reset_clock_to_cycles(i16 cycles, i8 poll_until_complete)
 {
+    tick_count = 0;
     rtc_set_tick_cycles(cycles);
-    rtc_reset();
     rtc_start();
-    // while(rtc_get_elapsed()!=1);
+    rtc_reset();
+    while (rtc_get_elapsed() != 1)
+        ++tick_count;
 }
 
 void rx_packet_received()
 {
-    P1OUT &= ~BIT4;
     u8 next_ts = 0;
     rtc_stop();
+    //i16 eb = rtc_get_elapsed();
     rtc_set_cb(0);
     radio_disable();
 
@@ -201,29 +204,45 @@ void rx_packet_received()
         rx_frame_synced = 1;
         _set_short_listen();
     }
+    // i16 eb2 = 0;
+    // i16 eb3 = 0;
 
-    next_ts = nctrl.cur_frame.cur_timeslot+1; 
+    next_ts = nctrl.cur_frame.cur_timeslot + 1;
     if (nctrl.cur_frame.our_timeslot && next_ts == nctrl.cur_frame.our_timeslot) // TX
     {
-        _reset_clock_to_cycles((nctrl.t.rx_packet_to_tx - nctrl.src_t.tx_to_rx_measured_delay), 1);
+        _reset_clock_to_cycles((nctrl.t.rx_packet_to_tx), 1);
+        P1OUT &= ~BIT4;
+        //eb2 = rtc_get_elapsed();
         _clock_out_payload();
         _rx_end_next_tx();
+        //eb3 = rtc_get_elapsed();
     }
     else if (next_ts > nctrl.timeslots_per_frame) // END Frame
     {
-        _reset_clock_to_cycles((nctrl.t.timeslot - nctrl.src_t.tx_to_rx_measured_delay), 1);
+        _reset_clock_to_cycles((nctrl.t.timeslot), 1);
+        P1OUT &= ~BIT4;
         _clock_out_payload();
         _rx_end_next_frame_end();
     }
     else // RX
     {
-        _reset_clock_to_cycles((nctrl.t.rx_packet_to_rx - nctrl.src_t.tx_to_rx_measured_delay), 1);
+        _reset_clock_to_cycles((nctrl.t.rx_packet_to_rx), 1);
+        P1OUT &= ~BIT4;
         _clock_out_payload();
         _rx_end_next_rx();
+        // eb3 = rtc_get_elapsed();
     }
 
-    bc_print_int(nctrl.cur_frame.cur_timeslot-1, 10);
+    bc_print_int(nctrl.cur_frame.cur_timeslot - 1, 10);
     bc_print(" RX\n\r");
+    // bc_print_int(nctrl.t.rx_packet_to_rx, 10);
+    // bc_print("\n\r");
+    // bc_print_int(eb, 10);
+    // bc_print_raw(' ');
+    // bc_print_int(eb2, 10);
+    // bc_print_raw(' ');
+    // bc_print_int(eb3, 10);
+    // bc_print("\n\r");
 
 #ifdef RADIO_DEBUG_RX_PACKET
     bc_print("fi: ");
@@ -280,7 +299,7 @@ void frame_rx_timeslot_begin()
     // Turn the RX on - should already be configured for RX
     P1OUT |= BIT4;
     radio_enable();
- 
+
     // Set the callback to the end of the timeslot assuming we receive no packet
     rtc_set_cb(frame_rx_timeslot_end);
 
@@ -327,7 +346,6 @@ void turn_rx_off()
     if (!rx_synced)
     {
         P1OUT ^= BIT5;
-        //P1OUT ^= BIT5;
         rx_synced = 1;
 
         // Setup TX root node packet
@@ -350,16 +368,16 @@ void turn_rx_off()
         rtc_set_cb(0);
         rtc_start();
         rtc_reset();
-        while(rtc_get_elapsed() != 1);
-        //toggel_pin_next_isr = 1;
+        while (rtc_get_elapsed() != 1)
+            ;
         frame_tx_timeslot();
     }
 }
 
 static void _set_short_listen()
 {
-    nctrl.src_t.listen = nctrl.src_t.packet_listen + nctrl.src_t.drift_listen;
-    _recalc_rtc_derived_from_source();
+    //nctrl.src_t.listen = nctrl.src_t.packet_listen + nctrl.src_t.drift_listen;
+    //_recalc_rtc_derived_from_source();
 }
 
 static void _set_long_listen()
@@ -370,33 +388,33 @@ static void _set_long_listen()
 
 static void _recalc_rtc_derived_from_source()
 {
-    nctrl.t.rx_on = (nctrl.src_t.settle + 2 * nctrl.src_t.listen) - 1;
-    nctrl.t.rx_no_packet_to_rx = (nctrl.src_t.timeslot - (nctrl.src_t.settle + 2 * nctrl.src_t.listen)) - 1;
-    nctrl.t.rx_no_packet_to_tx = (nctrl.src_t.timeslot - (nctrl.src_t.tx_to_rx_measured_delay + nctrl.src_t.listen)) - 1;
-    nctrl.t.rx_no_packet_to_end_frame = (nctrl.src_t.timeslot - nctrl.src_t.listen) - 1;
-    nctrl.t.rx_packet_to_rx = (nctrl.src_t.timeslot - (nctrl.src_t.settle + nctrl.src_t.listen)) - 1;
-    nctrl.t.rx_packet_to_tx = (nctrl.src_t.timeslot - nctrl.src_t.tx_to_rx_measured_delay) - 1;
-    nctrl.t.tx_to_rx = ((nctrl.src_t.timeslot + nctrl.src_t.tx_to_rx_measured_delay) - (nctrl.src_t.settle + nctrl.src_t.listen)) - 1;
-    nctrl.t.tx_to_end_frame = (nctrl.src_t.tx_to_rx_measured_delay + nctrl.src_t.settle) - 1;
-    nctrl.t.timeslot = nctrl.src_t.timeslot - 1;
+    nctrl.t.rx_on = (nctrl.src_t.tx_to_rx_measured_delay + 2 * nctrl.src_t.listen) - 1;                                       //
+    nctrl.t.rx_no_packet_to_tx = (nctrl.src_t.timeslot - (nctrl.src_t.tx_to_rx_measured_delay + nctrl.src_t.listen)) - 1;     //
+    nctrl.t.rx_no_packet_to_rx = (nctrl.src_t.timeslot - (nctrl.src_t.tx_to_rx_measured_delay + 2 * nctrl.src_t.listen)) - 1; //
+    nctrl.t.rx_no_packet_to_end_frame = (nctrl.src_t.timeslot - nctrl.src_t.listen) - 1;                                      //
+    nctrl.t.rx_packet_to_tx = (nctrl.src_t.timeslot - nctrl.src_t.tx_to_rx_measured_delay) - 1;                               //
+    nctrl.t.rx_packet_to_rx = (nctrl.src_t.timeslot - (nctrl.src_t.tx_to_rx_measured_delay + nctrl.src_t.listen)) - 1;        //
+    nctrl.t.tx_to_rx = (nctrl.src_t.timeslot - nctrl.src_t.listen) - 1;                                                       //
+    nctrl.t.tx_to_end_frame = (nctrl.src_t.timeslot + nctrl.src_t.tx_to_rx_measured_delay) - 1;                               //
+    nctrl.t.timeslot = nctrl.src_t.timeslot - 1;                                                                              //
 }
 
 static void _setup_rtc()
 {
     // Setup control parameters
     nctrl.timeslots_per_frame = 8;
-    nctrl.startup_listen_frame_count = 20; // Wait 4 * 2 == 8 seconds
+    nctrl.startup_listen_frame_count = 6; // Wait 4 * 2 == 8 seconds
     nctrl.sleep_frame_count = 20;
 
     nctrl.src_t.timeslot = CRYSTAL_FREQ / 8; // 125 ms
-    nctrl.src_t.settle = 5;                  // 152.59 uS
-    nctrl.src_t.tx_to_rx_measured_delay = 10;
-    
+    //nctrl.src_t.settle = 5;                  // 152.59 uS
+    nctrl.src_t.tx_to_rx_measured_delay = 15;
+
     double exact_calc = CRYSTAL_PPM * 0.000001 * nctrl.src_t.timeslot * nctrl.timeslots_per_frame;
     double pckt_oa = ((double)(PACKET_BYTE_SIZE * 8) / 2000000) * CRYSTAL_FREQ;
     nctrl.src_t.drift_listen = (u8)(exact_calc + ROUND_THRESHOLD);
     nctrl.src_t.frame_extra_drift_listen = (u8)(exact_calc * nctrl.sleep_frame_count + ROUND_THRESHOLD) - nctrl.src_t.drift_listen;
-    nctrl.src_t.packet_listen = (u8)(pckt_oa/2.0 + ROUND_THRESHOLD);
+    nctrl.src_t.packet_listen = (u8)(pckt_oa / 2.0 + ROUND_THRESHOLD);
     _set_long_listen();
 
     rtc_init();
@@ -414,30 +432,55 @@ void node_control_init()
     bc_init();
     radio_init();
 
-    #ifndef RADIO_DEBUG_SPI
+#ifndef RADIO_DEBUG_SPI
     _setup_rtc();
     radio_set_pckt_rx_cb(rx_packet_received);
-    radio_set_pckt_tx_cb(tx_packet_sent);    
-    #endif // !RADIO_DEBUG_SPI
+    radio_set_pckt_tx_cb(tx_packet_sent);
+#endif // !RADIO_DEBUG_SPI
 
     _EINT();
-    bc_print("Tl, Tlframe, Tld: ");
+    bc_print("Ts, Tl, Tdl, Tlframe, Tpl, Tmeas\n\r");
+    bc_print_int(nctrl.src_t.timeslot, 10);
+    bc_print_raw(',');
     bc_print_byte(nctrl.src_t.listen, 10);
+    bc_print_raw(',');
+    bc_print_byte(nctrl.src_t.drift_listen, 10);
     bc_print_raw(',');
     bc_print_byte(nctrl.src_t.frame_extra_drift_listen, 10);
     bc_print_raw(',');
-    bc_print_int(nctrl.src_t.drift_listen, 10);
+    bc_print_byte(nctrl.src_t.packet_listen, 10);
+    bc_print_raw(',');
+    bc_print_byte(nctrl.src_t.tx_to_rx_measured_delay, 10);
+
+    bc_print("\n\rTime delays...\n\rRXNP->TX:");
+    bc_print_int(nctrl.t.rx_no_packet_to_tx, 10);
+    bc_print("\n\rRXNP->RX:");
+    bc_print_int(nctrl.t.rx_no_packet_to_rx, 10);
+    bc_print("\n\rRXNP->EF:");
+    bc_print_int(nctrl.t.rx_no_packet_to_end_frame, 10);
+    bc_print("\n\rRXP->TX:");
+    bc_print_int(nctrl.t.rx_packet_to_tx, 10);
+    bc_print("\n\rRXP->RX:");
+    bc_print_int(nctrl.t.rx_packet_to_rx, 10);
+    bc_print("\n\rTX->RX:");
+    bc_print_int(nctrl.t.tx_to_rx, 10);
+    bc_print("\n\rTX->EF:");
+    bc_print_int(nctrl.t.tx_to_end_frame, 10);
+    bc_print("\n\rRX_ON:");
+    bc_print_int(nctrl.t.rx_on, 10);
+    bc_print("\n\r");
+
     bc_print_crlf("\n\rInitialized");
 }
 
 void node_control_run()
 {
-    #ifndef RADIO_DEBUG_SPI
+#ifndef RADIO_DEBUG_SPI
     radio_configure(RADIO_RX);
     radio_enable();
-    rtc_start();    
-    #endif // !RADIO_DEBUG_SPI
-    
+    rtc_start();
+#endif // !RADIO_DEBUG_SPI
+
     while (1)
     {
         rtc_update();
@@ -532,18 +575,5 @@ void _setup_clocks()
     P4SEL0 |= BIT1;
     P4SEL0 |= BIT2;
 
-    // Clear SELA bits - use XT1clock as SELA
     CSCTL4 &= ~0x0F00;
-    //CSCTL6 |= XT1BYPASS;
-
-    //CSCTL6 &= ~XT1AUTOOFF;
-    //CSCTL4 |= 0x0200;
-
-    //CSCTL5 &= ~VLOAUTOOFF;
-
-    // Clear DIVA - need to measure XT1
-    // CSCTL6 &= ~0x0F00;
-    // //CSCTL6 |= 0x0100;
-    // CSCTL6 |= BIT4;
-    // CSCTL6 &= ~XT1AUTOOFF;
 }
