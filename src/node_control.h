@@ -87,6 +87,10 @@ typedef struct
 
 static void _setup_clocks();
 static void _setup_pins();
+static void _prepare_next_timeslot();
+static void _set_timeslot_bit();
+static void _unset_timeslot_bit();
+static void _sync_new_timeslot();
 
 #ifndef RADIO_DEBUG_SPI
 static void _recalc_rtc_derived_from_source();

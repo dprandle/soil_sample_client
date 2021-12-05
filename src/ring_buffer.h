@@ -4,7 +4,7 @@
 #ifdef RADIO_DEBUG_RX_PACKET
 #define RING_BUFFER_SIZE 256
 #else
-#define RING_BUFFER_SIZE 256
+#define RING_BUFFER_SIZE 128
 #endif
 
 typedef struct

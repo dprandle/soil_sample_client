@@ -35,15 +35,11 @@ void _clock_out_payload()
     CUR_TIMESLOT_DATA.data = pckt.data;
 
     // Add this timeslot to our timeslot mask entry, if our timeslot has been selected (not our first frame)
-    if (nctrl.cur_frame.our_timeslot)
-        OUR_TIMESLOT_DATA.timeslot_mask |= (0x0001 << (nctrl.cur_frame.cur_timeslot - 1));
-
     // Do forward logic stuff here
 
     if (pckt.total_node_count > nctrl.total_node_count)
         nctrl.total_node_count = pckt.total_node_count;
 
-    ++nctrl.cur_frame.cur_timeslot;
     //    bc_print_crlf("RX Packet");
 }
 
@@ -53,6 +49,56 @@ void tx_packet_sent()
     radio_configure(RADIO_RX);
     bc_print_byte(nctrl.cur_frame.cur_timeslot - 1, 10);
     bc_print_crlf(" TX");
+}
+
+void _sync_new_timeslot()
+{
+    i16 occupied_mask = 0;
+    i16 my_occupied_mask = 0;
+    i8 first_occupied = 0;
+    for (i8 i = 0; i < nctrl.timeslots_per_frame; ++i)
+    {
+        // Set the first occupied slot so we know where to search after... we can't try to take a node before this because
+        // we may have started up in the middle of the frame (however unlikely)
+        if (!first_occupied && nctrl.cur_frame.timeslots[i].timeslot_mask)
+            first_occupied = i + 1;
+
+        // Or the occupied timeslot masks of the other nodes in our neighborhood - the gives me the occupied timeslots within 2 hops
+        occupied_mask |= nctrl.cur_frame.timeslots[i].timeslot_mask;
+
+        // Set the bit in my occupied mask - this is basically the nodes in my immediate neighborhood
+        if (nctrl.cur_frame.timeslots[i].timeslot_mask)
+            my_occupied_mask |= (0x0001 << i);
+    }
+
+    // Find first open, but must be after our first occupied (to make sure we have heard if there is anything to hear)
+    i8 first_open = 0;
+    for (i8 i = first_occupied; i < nctrl.timeslots_per_frame; ++i)
+    {
+        if (!((occupied_mask >> i) & 0x0001))
+        {
+            first_open = i + 1;
+            break;
+        }
+    }
+    nctrl.cur_frame.our_timeslot = first_open;
+    OUR_TIMESLOT_DATA.timeslot_mask = my_occupied_mask | (0x0001 << (nctrl.cur_frame.our_timeslot - 1));
+
+    // Increment the node count and set our address
+    ++nctrl.total_node_count;
+    OUR_TIMESLOT_DATA.data.src_addr = nctrl.total_node_count;
+
+    // Always send data to source node
+    OUR_TIMESLOT_DATA.data.dest_addr = 0x01;
+
+    bc_print_crlf("\n\rNew Node Synced");
+    // bc_print("\n\rAddress: ");
+    // bc_print_byte(OUR_TIMESLOT_DATA.data.src_addr, 10);
+    // bc_print("\n\rTimeslot: ");
+    // bc_print_byte(nctrl.cur_frame.our_timeslot, 10);
+    // bc_print("\n\rTS Mask: ");
+    // bc_print_int(OUR_TIMESLOT_DATA.timeslot_mask, 10);
+    // bc_print_crlf("\n\r----");
 }
 
 void frame_start()
@@ -97,54 +143,7 @@ void frame_end()
     // If our timeslot is 0, that means this was our first sync timeslot and now we need to figure
     // out our address and timeslot so it will be sent out next frame
     if (!nctrl.cur_frame.our_timeslot)
-    {
-        i16 occupied_mask = 0;
-        i16 my_occupied_mask = 0;
-        i8 first_occupied = 0;
-        for (i8 i = 0; i < nctrl.timeslots_per_frame; ++i)
-        {
-            // Set the first occupied slot so we know where to search after... we can't try to take a node before this because
-            // we may have started up in the middle of the frame (however unlikely)
-            if (!first_occupied && nctrl.cur_frame.timeslots[i].timeslot_mask)
-                first_occupied = i + 1;
-
-            // Or the occupied timeslot masks of the other nodes in our neighborhood - the gives me the occupied timeslots within 2 hops
-            occupied_mask |= nctrl.cur_frame.timeslots[i].timeslot_mask;
-
-            // Set the bit in my occupied mask - this is basically the nodes in my immediate neighborhood
-            if (nctrl.cur_frame.timeslots[i].timeslot_mask)
-                my_occupied_mask |= (0x0001 << i);
-        }
-
-        // Find first open, but must be after our first occupied (to make sure we have heard if there is anything to hear)
-        i8 first_open = 0;
-        for (i8 i = first_occupied; i < nctrl.timeslots_per_frame; ++i)
-        {
-            if (!((occupied_mask >> i) & 0x0001))
-            {
-                first_open = i + 1;
-                break;
-            }
-        }
-        nctrl.cur_frame.our_timeslot = first_open;
-        OUR_TIMESLOT_DATA.timeslot_mask = my_occupied_mask | (0x0001 << (nctrl.cur_frame.our_timeslot - 1));
-
-        // Increment the node count and set our address
-        ++nctrl.total_node_count;
-        OUR_TIMESLOT_DATA.data.src_addr = nctrl.total_node_count;
-
-        // Always send data to source node
-        OUR_TIMESLOT_DATA.data.dest_addr = 0x01;
-
-        bc_print_crlf("\n\rNew Node Synced");
-        // bc_print("\n\rAddress: ");
-        // bc_print_byte(OUR_TIMESLOT_DATA.data.src_addr, 10);
-        // bc_print("\n\rTimeslot: ");
-        // bc_print_byte(nctrl.cur_frame.our_timeslot, 10);
-        // bc_print("\n\rTS Mask: ");
-        // bc_print_int(OUR_TIMESLOT_DATA.timeslot_mask, 10);
-        // bc_print_crlf("\n\r----");
-    }
+        _sync_new_timeslot();
 }
 
 void _rx_end_next_tx()
@@ -172,15 +171,31 @@ void _rx_end_next_frame_end()
     rtc_set_tick_cycles(nctrl.t.timeslot);
 }
 
-i8 tick_count = 0;
-void _reset_clock_to_cycles(i16 cycles, i8 poll_until_complete)
+void _reset_clock_to_cycles(i16 cycles)
 {
-    tick_count = 0;
     rtc_set_tick_cycles(cycles);
     rtc_start();
     rtc_reset();
     while (rtc_get_elapsed() != 1)
-        ++tick_count;
+        ;
+}
+
+static void _set_timeslot_bit()
+{
+    OUR_TIMESLOT_DATA.timeslot_mask |= (0x0001 << (nctrl.cur_frame.cur_timeslot - 1));
+}
+
+static void _unset_timeslot_bit()
+{
+    OUR_TIMESLOT_DATA.timeslot_mask &= ~(0x0001 << (nctrl.cur_frame.cur_timeslot - 1));
+}
+
+void _prepare_next_timeslot(i16 cycles)
+{
+    _reset_clock_to_cycles(cycles);
+    P1OUT &= ~BIT4;
+    _clock_out_payload();
+    ++nctrl.cur_frame.cur_timeslot;
 }
 
 void rx_packet_received()
@@ -204,45 +219,29 @@ void rx_packet_received()
         rx_frame_synced = 1;
         _set_short_listen();
     }
-    // i16 eb2 = 0;
-    // i16 eb3 = 0;
+
+    if (nctrl.cur_frame.our_timeslot)
+        _set_timeslot_bit();
 
     next_ts = nctrl.cur_frame.cur_timeslot + 1;
     if (nctrl.cur_frame.our_timeslot && next_ts == nctrl.cur_frame.our_timeslot) // TX
     {
-        _reset_clock_to_cycles((nctrl.t.rx_packet_to_tx), 1);
-        P1OUT &= ~BIT4;
-        //eb2 = rtc_get_elapsed();
-        _clock_out_payload();
+        _prepare_next_timeslot(nctrl.t.rx_packet_to_tx);
         _rx_end_next_tx();
-        //eb3 = rtc_get_elapsed();
     }
     else if (next_ts > nctrl.timeslots_per_frame) // END Frame
     {
-        _reset_clock_to_cycles((nctrl.t.timeslot), 1);
-        P1OUT &= ~BIT4;
-        _clock_out_payload();
+        _prepare_next_timeslot(nctrl.t.timeslot);
         _rx_end_next_frame_end();
     }
     else // RX
     {
-        _reset_clock_to_cycles((nctrl.t.rx_packet_to_rx), 1);
-        P1OUT &= ~BIT4;
-        _clock_out_payload();
+        _prepare_next_timeslot(nctrl.t.rx_packet_to_rx);
         _rx_end_next_rx();
-        // eb3 = rtc_get_elapsed();
     }
 
     bc_print_int(nctrl.cur_frame.cur_timeslot - 1, 10);
     bc_print(" RX\n\r");
-    // bc_print_int(nctrl.t.rx_packet_to_rx, 10);
-    // bc_print("\n\r");
-    // bc_print_int(eb, 10);
-    // bc_print_raw(' ');
-    // bc_print_int(eb2, 10);
-    // bc_print_raw(' ');
-    // bc_print_int(eb3, 10);
-    // bc_print("\n\r");
 
 #ifdef RADIO_DEBUG_RX_PACKET
     bc_print("fi: ");
@@ -282,7 +281,7 @@ void frame_rx_timeslot_end()
 
     // Remove this timeslot from our timeslot mask entry
     if (nctrl.cur_frame.our_timeslot)
-        OUR_TIMESLOT_DATA.timeslot_mask &= ~(0x0001 << (nctrl.cur_frame.cur_timeslot - 1));
+        _unset_timeslot_bit();
 
     // Increment to next timeslot
     ++nctrl.cur_frame.cur_timeslot;
@@ -406,7 +405,7 @@ static void _setup_rtc()
     nctrl.startup_listen_frame_count = 6; // Wait 4 * 2 == 8 seconds
     nctrl.sleep_frame_count = 20;
 
-    nctrl.src_t.timeslot = CRYSTAL_FREQ / 8; // 125 ms
+    nctrl.src_t.timeslot = CRYSTAL_FREQ / 8;  // 125 ms
     nctrl.src_t.tx_to_rx_measured_delay = 15; // DONT FREAKING CHANGE THIS NUMBER
 
     double exact_calc = CRYSTAL_PPM * 0.000001 * nctrl.src_t.timeslot * nctrl.timeslots_per_frame;
