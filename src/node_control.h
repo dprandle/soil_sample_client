@@ -12,6 +12,8 @@
 #define MAX_TIMESLOTS_PER_FRAME 32
 #define OUR_TIMESLOT_DATA nctrl.cur_frame.timeslots[nctrl.cur_frame.our_timeslot-1]
 #define CUR_TIMESLOT_DATA nctrl.cur_frame.timeslots[nctrl.cur_frame.cur_timeslot-1]
+#define TS_DATA(tsnum) nctrl.cur_frame.timeslots[tsnum-1]
+#define NO_RX_COUNT 1
 
 typedef struct
 {
@@ -28,7 +30,7 @@ typedef union
         i8 timeslot;
         i16 timeslot_mask;
         i8 total_node_count;
-        i8 future1;
+        i8 removed_node_addr;
         i16 future2;
         Node_Data data;
         Node_Data fwd[MAX_NODE_HOPS];
@@ -39,6 +41,7 @@ typedef union
 typedef struct
 {
     i8 timeslot_mask;
+    i8 no_rx_count;
     Node_Data data;
 } Timeslot_Info;
 
@@ -70,6 +73,9 @@ typedef struct
     u8 our_timeslot;
     u8 ind;
     u8 cur_timeslot;
+
+    u8 remove_next_frame;
+    u8 remove_this_frame;
     Timeslot_Info timeslots[MAX_TIMESLOTS_PER_FRAME];
 } Frame_Info;
 

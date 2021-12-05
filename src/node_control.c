@@ -5,25 +5,39 @@
 #include "radio_nrf24l01p.h"
 #include "rtc.h"
 
-volatile Node_Control nctrl;
-volatile Timeslot_Packet pckt;
+volatile Node_Control nctrl = {};
+volatile Timeslot_Packet pckt = {};
 volatile u8 rx_synced = 0;
 volatile u8 rx_frame_synced = 0;
 
 #ifndef RADIO_DEBUG_SPI
+void _clear_timeslot(i8 ind)
+{
+    nctrl.cur_frame.timeslots[ind].data.data = 0x00;
+    nctrl.cur_frame.timeslots[ind].data.src_addr = 0x00;
+    nctrl.cur_frame.timeslots[ind].data.dest_addr = 0x00;
+    nctrl.cur_frame.timeslots[ind].no_rx_count = 0x00;
+    nctrl.cur_frame.timeslots[ind].timeslot_mask = 0x00;
+}
+
 void _clock_in_payload()
 {
     pckt.frame_ind = nctrl.cur_frame.ind;
     pckt.timeslot = nctrl.cur_frame.cur_timeslot;
+
+    // The TX always counts as a taken timeslot
+    _set_timeslot_bit();
     pckt.timeslot_mask = OUR_TIMESLOT_DATA.timeslot_mask;
     pckt.total_node_count = nctrl.total_node_count;
-    pckt.future1 = 23;
     pckt.future2 = 134;
     pckt.data.src_addr = OUR_TIMESLOT_DATA.data.src_addr;
     pckt.data.dest_addr = OUR_TIMESLOT_DATA.data.dest_addr;
     pckt.data.data = 55;
+
+    if (nctrl.cur_frame.remove_this_frame)
+        pckt.removed_node_addr = nctrl.cur_frame.remove_this_frame;
+
     radio_clock_in(pckt.raw_data, RADIO_PAYLOAD_SIZE);
-    //    bc_print_crlf("TX Packet");
 }
 
 void _clock_out_payload()
@@ -40,7 +54,11 @@ void _clock_out_payload()
     if (pckt.total_node_count > nctrl.total_node_count)
         nctrl.total_node_count = pckt.total_node_count;
 
-    //    bc_print_crlf("RX Packet");
+    if (pckt.removed_node_addr && pckt.removed_node_addr != nctrl.cur_frame.remove_this_frame)
+        nctrl.cur_frame.remove_next_frame = pckt.removed_node_addr;
+
+    // Set the no receive count to zero
+    CUR_TIMESLOT_DATA.no_rx_count = 0;
 }
 
 void tx_packet_sent()
@@ -82,7 +100,7 @@ void _sync_new_timeslot()
         }
     }
     nctrl.cur_frame.our_timeslot = first_open;
-    OUR_TIMESLOT_DATA.timeslot_mask = my_occupied_mask | (0x0001 << (nctrl.cur_frame.our_timeslot - 1));
+    //OUR_TIMESLOT_DATA.timeslot_mask = my_occupied_mask | (0x0001 << (nctrl.cur_frame.our_timeslot - 1));
 
     // Increment the node count and set our address
     ++nctrl.total_node_count;
@@ -91,14 +109,7 @@ void _sync_new_timeslot()
     // Always send data to source node
     OUR_TIMESLOT_DATA.data.dest_addr = 0x01;
 
-    bc_print_crlf("\n\rNew Node Synced");
-    // bc_print("\n\rAddress: ");
-    // bc_print_byte(OUR_TIMESLOT_DATA.data.src_addr, 10);
-    // bc_print("\n\rTimeslot: ");
-    // bc_print_byte(nctrl.cur_frame.our_timeslot, 10);
-    // bc_print("\n\rTS Mask: ");
-    // bc_print_int(OUR_TIMESLOT_DATA.timeslot_mask, 10);
-    // bc_print_crlf("\n\r----");
+    bc_print_crlf("\n\rNode Sync");
 }
 
 void frame_start()
@@ -140,10 +151,67 @@ void frame_end()
     ++nctrl.cur_frame.ind;
     nctrl.cur_frame.cur_timeslot = 0;
 
+    i8 rmtf = nctrl.cur_frame.remove_this_frame;
+    if (nctrl.cur_frame.remove_this_frame)
+    {
+        --nctrl.total_node_count;
+        for (i8 i = 0; i < nctrl.timeslots_per_frame; ++i)
+        {
+            i8 ts = i+1;
+            if (TS_DATA(ts).data.src_addr == nctrl.cur_frame.remove_this_frame)
+                _clear_timeslot(i);
+            
+            if (TS_DATA(ts).data.src_addr > nctrl.cur_frame.remove_this_frame)
+            {
+                i8 src = TS_DATA(ts).data.src_addr;
+                --TS_DATA(ts).data.src_addr;
+            }
+        }
+        pckt.removed_node_addr = 0x00;
+        nctrl.cur_frame.remove_this_frame = 0x00;
+    }
+
+    i8 rmnf = nctrl.cur_frame.remove_next_frame;
+    if (nctrl.cur_frame.remove_next_frame)
+    {
+        nctrl.cur_frame.remove_this_frame = nctrl.cur_frame.remove_next_frame;
+        nctrl.cur_frame.remove_next_frame = 0x00;
+    }
+
+    i8 rmtfa = nctrl.cur_frame.remove_this_frame;
+    i8 rmnfa = nctrl.cur_frame.remove_next_frame;
+
     // If our timeslot is 0, that means this was our first sync timeslot and now we need to figure
     // out our address and timeslot so it will be sent out next frame
     if (!nctrl.cur_frame.our_timeslot)
         _sync_new_timeslot();
+
+    bc_print("\n\rNodes:");
+    bc_print_byte(nctrl.total_node_count, 10);
+    bc_print(" RMTF:");
+    bc_print_int(rmtf, 10);
+    bc_print(" RMTFa:");
+    bc_print_int(rmtfa, 10);
+    bc_print(" RMNF:");
+    bc_print_int(rmnf, 10);
+    bc_print(" RMNFa:");
+    bc_print_int(rmnfa, 10);
+    bc_print("\n\r");
+    for (i8 i = 0; i < nctrl.timeslots_per_frame; ++i)
+    {
+        i8 ts = i + 1;
+        bc_print("TS: ");
+        bc_print_byte(ts, 10);
+        bc_print(" Addr:");
+        bc_print_int(TS_DATA(ts).data.src_addr, 10);
+        bc_print(" Mask:");
+        bc_print_int(TS_DATA(ts).timeslot_mask, 10);
+        bc_print(" Data:");
+        bc_print_int(TS_DATA(ts).data.data, 10);
+        bc_print(" NORXCNT:");
+        bc_print_int(TS_DATA(ts).no_rx_count, 10);
+        bc_print("\n\r");
+    }
 }
 
 void _rx_end_next_tx()
@@ -202,7 +270,6 @@ void rx_packet_received()
 {
     u8 next_ts = 0;
     rtc_stop();
-    //i16 eb = rtc_get_elapsed();
     rtc_set_cb(0);
     radio_disable();
 
@@ -282,6 +349,12 @@ void frame_rx_timeslot_end()
     // Remove this timeslot from our timeslot mask entry
     if (nctrl.cur_frame.our_timeslot)
         _unset_timeslot_bit();
+
+    if (CUR_TIMESLOT_DATA.timeslot_mask)
+        ++CUR_TIMESLOT_DATA.no_rx_count;
+
+    if (CUR_TIMESLOT_DATA.no_rx_count >= NO_RX_COUNT && !nctrl.cur_frame.remove_next_frame && !nctrl.cur_frame.remove_this_frame)
+        nctrl.cur_frame.remove_next_frame = CUR_TIMESLOT_DATA.data.src_addr;
 
     // Increment to next timeslot
     ++nctrl.cur_frame.cur_timeslot;
@@ -402,8 +475,8 @@ static void _setup_rtc()
 {
     // Setup control parameters
     nctrl.timeslots_per_frame = 8;
-    nctrl.startup_listen_frame_count = 6; // Wait 4 * 2 == 8 seconds
-    nctrl.sleep_frame_count = 20;
+    nctrl.sleep_frame_count = 6;
+    nctrl.startup_listen_frame_count = nctrl.sleep_frame_count + 1; // Wait 4 * 2 == 8 seconds
 
     nctrl.src_t.timeslot = CRYSTAL_FREQ / 8;  // 125 ms
     nctrl.src_t.tx_to_rx_measured_delay = 15; // DONT FREAKING CHANGE THIS NUMBER

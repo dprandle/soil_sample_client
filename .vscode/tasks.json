@@ -29,7 +29,54 @@
                 "focus": true
             },
             "problemMatcher":[]
-        }
+        },
+        {
+            "label": "MSP Upload All",
+            "type":"shell",
+            "command": "${workspaceFolder}/mspdebug.sh --allow-fw-update -d /dev/ttyACM4 tilib \"prog ${command:cmake.launchTargetPath}\"",
+            "group": "none",
+            "options": {},
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "showReuseMessage": true,
+                "clear": true,
+                "focus": true
+            },
+            "problemMatcher":[],
+            "dependsOn":["MSP ACM2"]
+        },
+        {
+            "label": "MSP ACM2",
+            "type":"shell",
+            "command": "${workspaceFolder}/mspdebug.sh --allow-fw-update -d /dev/ttyACM2 tilib \"prog ${command:cmake.launchTargetPath}\"",
+            "group": "none",
+            "options": {},
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "showReuseMessage": true,
+                "clear": true,
+                "focus": true
+            },
+            "problemMatcher":[],
+            "dependsOn":["MSP ACM0"]
+        },
+        {
+            "label": "MSP ACM0",
+            "type":"shell",
+            "command": "${workspaceFolder}/mspdebug.sh --allow-fw-update -d /dev/ttyACM0 tilib \"prog ${command:cmake.launchTargetPath}\"",
+            "group": "none",
+            "options": {},
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "showReuseMessage": true,
+                "clear": true,
+                "focus": true
+            },
+            "problemMatcher":[]
+        },
     ],
     "inputs": [
         {
