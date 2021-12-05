@@ -4,11 +4,17 @@
 #include "backchannel_uart.h"
 #include "radio_nrf24l01p.h"
 #include "rtc.h"
+#include "soil_sensor.h"
 
 volatile Node_Control nctrl = {};
 volatile Timeslot_Packet pckt = {};
 volatile u8 rx_synced = 0;
 volatile u8 rx_frame_synced = 0;
+
+static void _sample_callback()
+{
+    nctrl.cur_frame.our_data.data = soil_sensor_get_latest_sample();
+}
 
 #ifndef RADIO_DEBUG_SPI
 void _clear_timeslot(i8 ind)
@@ -50,6 +56,7 @@ void _clock_out_payload()
 
     // Add this timeslot to our timeslot mask entry, if our timeslot has been selected (not our first frame)
     // Do forward logic stuff here
+    
 
     if (pckt.total_node_count > nctrl.total_node_count)
         nctrl.total_node_count = pckt.total_node_count;
@@ -157,10 +164,17 @@ void frame_start()
 void frame_prep_start()
 {
     rx_frame_synced = 0;
+
+    // Need a long listen at the start of frame - until we get at least one RX packet
     _set_long_listen();
     rtc_set_interrupt_tick_count(0);
     rtc_set_cb(frame_start);
+    
+    // Trigger a fresh sensor sample
+    soil_sensor_trigger_sample();
     toggel_pin_next_isr = 1;
+
+    // Always setting the rtc clock ahead of the interrupt triggering - due to the shadow register
     if (nctrl.cur_frame.cur_timeslot + 1 == nctrl.cur_frame.our_timeslot)
         rtc_set_tick_cycles(nctrl.t.rx_packet_to_tx);
     else
@@ -173,6 +187,10 @@ void frame_end()
     rtc_set_cb(frame_prep_start);
     ++nctrl.cur_frame.ind;
     nctrl.cur_frame.cur_timeslot = 0;
+
+    // Ensure we get new sample data every frame
+    nctrl.cur_frame.our_data.data = 0x00;
+
     _handle_removed_nodes();
 
     // If our timeslot is 0, that means this was our first sync timeslot and now we need to figure
@@ -500,7 +518,8 @@ void node_control_init()
     radio_set_pckt_rx_cb(rx_packet_received);
     radio_set_pckt_tx_cb(tx_packet_sent);
 #endif // !RADIO_DEBUG_SPI
-
+    soil_sensor_init();
+    soil_sensor_set_cb(_sample_callback);
     _EINT();
 
 #ifdef DBC_UART_DEBUG
@@ -544,12 +563,12 @@ void node_control_run()
     radio_enable();
     rtc_start();
 #endif // !RADIO_DEBUG_SPI
-
     while (1)
     {
         rtc_update();
         bc_update();
         radio_update();
+        soil_sensor_update();
         LPM4;
     }
 }
@@ -559,11 +578,6 @@ void node_control_shutdown()
 
 void _setup_pins()
 {
-    // SMCLK on P8.0
-    P8SEL0 |= BIT0;
-    SYSCFG2 &= ~ADCPCTL8;
-    P8DIR |= BIT0;
-
     // ACLK on P8.1
     P8SEL0 |= BIT1;
     SYSCFG2 &= ~ADCPCTL9;

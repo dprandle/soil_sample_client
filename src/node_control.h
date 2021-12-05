@@ -73,6 +73,8 @@ typedef struct
     u8 our_timeslot;
     u8 ind;
     u8 cur_timeslot;
+    Node_Data our_data;
+    Node_Data our_fwds[MAX_NODE_HOPS];
 
     u8 remove_next_frame;
     u8 remove_this_frame;
@@ -97,6 +99,7 @@ static void _prepare_next_timeslot();
 static void _set_timeslot_bit();
 static void _unset_timeslot_bit();
 static void _sync_new_timeslot();
+static void _sample_callback();
 
 #ifndef RADIO_DEBUG_SPI
 static void _recalc_rtc_derived_from_source();
