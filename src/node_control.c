@@ -100,7 +100,6 @@ void _sync_new_timeslot()
         }
     }
     nctrl.cur_frame.our_timeslot = first_open;
-    //OUR_TIMESLOT_DATA.timeslot_mask = my_occupied_mask | (0x0001 << (nctrl.cur_frame.our_timeslot - 1));
 
     // Increment the node count and set our address
     ++nctrl.total_node_count;
@@ -112,10 +111,34 @@ void _sync_new_timeslot()
     bc_print_crlf("\n\rNode Sync");
 }
 
+void _handle_removed_nodes()
+{
+    if (nctrl.cur_frame.remove_this_frame)
+    {
+        --nctrl.total_node_count;
+        for (i8 i = 0; i < nctrl.timeslots_per_frame; ++i)
+        {
+            i8 ts = i + 1;
+            if (TS_DATA(ts).data.src_addr == nctrl.cur_frame.remove_this_frame)
+                _clear_timeslot(i);
+
+            if (TS_DATA(ts).data.src_addr > nctrl.cur_frame.remove_this_frame)
+                --TS_DATA(ts).data.src_addr;
+        }
+        pckt.removed_node_addr = 0x00;
+        nctrl.cur_frame.remove_this_frame = 0x00;
+    }
+
+    if (nctrl.cur_frame.remove_next_frame)
+    {
+        nctrl.cur_frame.remove_this_frame = nctrl.cur_frame.remove_next_frame;
+        nctrl.cur_frame.remove_next_frame = 0x00;
+    }
+}
+
 void frame_start()
 {
     ++nctrl.cur_frame.cur_timeslot;
-    //bc_print_int(rtc_get_tick_cycles(),10);
     if (nctrl.cur_frame.cur_timeslot == nctrl.cur_frame.our_timeslot)
     {
         // The frame after this HAS to be TX - only one rx frame and def not end of frame.. so...
@@ -150,52 +173,18 @@ void frame_end()
     rtc_set_cb(frame_prep_start);
     ++nctrl.cur_frame.ind;
     nctrl.cur_frame.cur_timeslot = 0;
-
-    i8 rmtf = nctrl.cur_frame.remove_this_frame;
-    if (nctrl.cur_frame.remove_this_frame)
-    {
-        --nctrl.total_node_count;
-        for (i8 i = 0; i < nctrl.timeslots_per_frame; ++i)
-        {
-            i8 ts = i+1;
-            if (TS_DATA(ts).data.src_addr == nctrl.cur_frame.remove_this_frame)
-                _clear_timeslot(i);
-            
-            if (TS_DATA(ts).data.src_addr > nctrl.cur_frame.remove_this_frame)
-            {
-                i8 src = TS_DATA(ts).data.src_addr;
-                --TS_DATA(ts).data.src_addr;
-            }
-        }
-        pckt.removed_node_addr = 0x00;
-        nctrl.cur_frame.remove_this_frame = 0x00;
-    }
-
-    i8 rmnf = nctrl.cur_frame.remove_next_frame;
-    if (nctrl.cur_frame.remove_next_frame)
-    {
-        nctrl.cur_frame.remove_this_frame = nctrl.cur_frame.remove_next_frame;
-        nctrl.cur_frame.remove_next_frame = 0x00;
-    }
-
-    i8 rmtfa = nctrl.cur_frame.remove_this_frame;
-    i8 rmnfa = nctrl.cur_frame.remove_next_frame;
+    _handle_removed_nodes();
 
     // If our timeslot is 0, that means this was our first sync timeslot and now we need to figure
     // out our address and timeslot so it will be sent out next frame
     if (!nctrl.cur_frame.our_timeslot)
         _sync_new_timeslot();
 
+    bc_print_int(nctrl.cur_frame.ind, 10);
+    bc_print(" Frames\n\r\r\n");
+#ifdef BC_UART_DEBUG
     bc_print("\n\rNodes:");
     bc_print_byte(nctrl.total_node_count, 10);
-    bc_print(" RMTF:");
-    bc_print_int(rmtf, 10);
-    bc_print(" RMTFa:");
-    bc_print_int(rmtfa, 10);
-    bc_print(" RMNF:");
-    bc_print_int(rmnf, 10);
-    bc_print(" RMNFa:");
-    bc_print_int(rmnfa, 10);
     bc_print("\n\r");
     for (i8 i = 0; i < nctrl.timeslots_per_frame; ++i)
     {
@@ -212,6 +201,7 @@ void frame_end()
         bc_print_int(TS_DATA(ts).no_rx_count, 10);
         bc_print("\n\r");
     }
+#endif
 }
 
 void _rx_end_next_tx()
@@ -310,6 +300,7 @@ void rx_packet_received()
     bc_print_int(nctrl.cur_frame.cur_timeslot - 1, 10);
     bc_print(" RX\n\r");
 
+#ifdef DBC_UART_DEBUG
 #ifdef RADIO_DEBUG_RX_PACKET
     bc_print("fi: ");
     bc_print_byte(pckt.frame_ind, 10);
@@ -338,6 +329,7 @@ void rx_packet_received()
         bc_print(" fwd_data: ");
         bc_print_int(pckt.fwd[i].data, 10);
     }
+#endif
 #endif
 }
 
@@ -510,6 +502,8 @@ void node_control_init()
 #endif // !RADIO_DEBUG_SPI
 
     _EINT();
+
+#ifdef DBC_UART_DEBUG
     bc_print("Ts, Tl, Tdl, Tlframe, Tpl, Tmeas\n\r");
     bc_print_int(nctrl.src_t.timeslot, 10);
     bc_print_raw(',');
@@ -522,7 +516,6 @@ void node_control_init()
     bc_print_byte(nctrl.src_t.packet_listen, 10);
     bc_print_raw(',');
     bc_print_byte(nctrl.src_t.tx_to_rx_measured_delay, 10);
-
     bc_print("\n\rTime delays...\n\rRXNP->TX:");
     bc_print_int(nctrl.t.rx_no_packet_to_tx, 10);
     bc_print("\n\rRXNP->RX:");
@@ -540,6 +533,7 @@ void node_control_init()
     bc_print("\n\rRX_ON:");
     bc_print_int(nctrl.t.rx_on, 10);
     bc_print("\n\r");
+#endif
     bc_print_crlf("\n\rInitialized");
 }
 

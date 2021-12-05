@@ -25,5 +25,8 @@ file(GLOB SRC_FILES
 # This takes quite a bit of memory to do so just use it when needed
 #add_definitions(-DRADIO_DEBUG_RX_PACKET)
 
+# Uncomment this to add more general debug backchannel uart info
+# add_definitions(-DBC_UART_DEBUG)
+
 msp430_add_executable(${TARGET_NAME} ${SRC_FILES})
 target_link_libraries(${TARGET_NAME} c gcc)
