@@ -9,11 +9,15 @@
 #define CRYSTAL_PPM     20
 #define CRYSTAL_FREQ    32768
 #define ROUND_THRESHOLD 0.75
-#define MAX_TIMESLOTS_PER_FRAME 32
+#define MAX_TIMESLOTS_PER_FRAME 16
 #define OUR_TIMESLOT_DATA nctrl.cur_frame.timeslots[nctrl.cur_frame.our_timeslot-1]
 #define CUR_TIMESLOT_DATA nctrl.cur_frame.timeslots[nctrl.cur_frame.cur_timeslot-1]
 #define TS_DATA(tsnum) nctrl.cur_frame.timeslots[tsnum-1]
 #define NO_RX_COUNT 1
+#define DELTA_TO_SEND 20
+#define NODE_OUTSIDE_NEIGHBORHOOD 0x8000
+
+extern u16 root_node_data[MAX_NODE_HOPS*MAX_TIMESLOTS_PER_FRAME];
 
 typedef struct
 {
@@ -73,7 +77,6 @@ typedef struct
     u8 our_timeslot;
     u8 ind;
     u8 cur_timeslot;
-    Node_Data our_data;
     Node_Data our_fwds[MAX_NODE_HOPS];
 
     u8 remove_next_frame;

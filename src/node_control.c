@@ -10,10 +10,28 @@ volatile Node_Control nctrl = {};
 volatile Timeslot_Packet pckt = {};
 volatile u8 rx_synced = 0;
 volatile u8 rx_frame_synced = 0;
+volatile u16 prev_sample = 0;
+u16 root_node_data[MAX_NODE_HOPS*MAX_TIMESLOTS_PER_FRAME] = {};
 
 static void _sample_callback()
 {
-    nctrl.cur_frame.our_data.data = soil_sensor_get_latest_sample();
+    OUR_TIMESLOT_DATA.data.data = soil_sensor_get_latest_sample();
+    if ((OUR_TIMESLOT_DATA.data.data > (prev_sample + DELTA_TO_SEND)) || ((OUR_TIMESLOT_DATA.data.data + DELTA_TO_SEND) < prev_sample))
+    {
+        OUR_TIMESLOT_DATA.data.dest_addr = 0x01;
+
+        // If there aren't any timeslots with our dest addr (ie root), mark the data so - using the upper most bit
+        // since our ADC is only 10 bits - the top few bits of the data are free for use
+        u16 mask = NODE_OUTSIDE_NEIGHBORHOOD;
+        for (i8 i = 0; i < nctrl.timeslots_per_frame; ++i)
+        {
+            i8 ts = i+1;
+            if (TS_DATA(ts).data.src_addr == OUR_TIMESLOT_DATA.data.dest_addr)
+                mask = 0;
+        }
+        OUR_TIMESLOT_DATA.data.data |= mask;
+        prev_sample = OUR_TIMESLOT_DATA.data.data;
+    }
 }
 
 #ifndef RADIO_DEBUG_SPI
@@ -36,9 +54,16 @@ void _clock_in_payload()
     pckt.timeslot_mask = OUR_TIMESLOT_DATA.timeslot_mask;
     pckt.total_node_count = nctrl.total_node_count;
     pckt.future2 = 134;
+
     pckt.data.src_addr = OUR_TIMESLOT_DATA.data.src_addr;
     pckt.data.dest_addr = OUR_TIMESLOT_DATA.data.dest_addr;
-    pckt.data.data = 55;
+    pckt.data.data = OUR_TIMESLOT_DATA.data.data;
+    if (OUR_TIMESLOT_DATA.data.dest_addr)
+        OUR_TIMESLOT_DATA.data.dest_addr = 0;
+
+    // We want to copy these no matter what - as they are filled in when receiving packets as needed    
+    for (i8 i = 0; i < MAX_NODE_HOPS; ++i)
+        pckt.fwd[i] = nctrl.cur_frame.our_fwds[i];
 
     if (nctrl.cur_frame.remove_this_frame)
         pckt.removed_node_addr = nctrl.cur_frame.remove_this_frame;
@@ -56,7 +81,16 @@ void _clock_out_payload()
 
     // Add this timeslot to our timeslot mask entry, if our timeslot has been selected (not our first frame)
     // Do forward logic stuff here
-    
+
+    if (nctrl.cur_frame.our_timeslot && (CUR_TIMESLOT_DATA.data.dest_addr == OUR_TIMESLOT_DATA.data.src_addr))
+    {
+        root_node_data[CUR_TIMESLOT_DATA.data.src_addr] = CUR_TIMESLOT_DATA.data.data;
+        bc_print_int(CUR_TIMESLOT_DATA.data.data,10);
+        bc_print(" from ");
+        bc_print_byte(CUR_TIMESLOT_DATA.data.src_addr,10);
+        bc_print("\n\r");
+    }
+
 
     if (pckt.total_node_count > nctrl.total_node_count)
         nctrl.total_node_count = pckt.total_node_count;
@@ -188,15 +222,16 @@ void frame_end()
     ++nctrl.cur_frame.ind;
     nctrl.cur_frame.cur_timeslot = 0;
 
-    // Ensure we get new sample data every frame
-    nctrl.cur_frame.our_data.data = 0x00;
-
     _handle_removed_nodes();
 
     // If our timeslot is 0, that means this was our first sync timeslot and now we need to figure
     // out our address and timeslot so it will be sent out next frame
     if (!nctrl.cur_frame.our_timeslot)
         _sync_new_timeslot();
+
+    // Ensure we get new sample data every frame
+    OUR_TIMESLOT_DATA.data.data = 0x0000;
+    OUR_TIMESLOT_DATA.data.dest_addr = 0x00;
 
     bc_print_int(nctrl.cur_frame.ind, 10);
     bc_print(" Frames\n\r\r\n");
