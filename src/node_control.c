@@ -11,7 +11,7 @@ volatile Timeslot_Packet pckt = {};
 volatile u8 rx_synced = 0;
 volatile u8 rx_frame_synced = 0;
 volatile u16 prev_sample = 0;
-u16 root_node_data[MAX_NODE_HOPS*MAX_TIMESLOTS_PER_FRAME] = {};
+u16 root_node_data[MAX_NODE_HOPS * MAX_TIMESLOTS_PER_FRAME] = {};
 
 static void _sample_callback()
 {
@@ -25,7 +25,7 @@ static void _sample_callback()
         u16 mask = NODE_OUTSIDE_NEIGHBORHOOD;
         for (i8 i = 0; i < nctrl.timeslots_per_frame; ++i)
         {
-            i8 ts = i+1;
+            i8 ts = i + 1;
             if (TS_DATA(ts).data.src_addr == OUR_TIMESLOT_DATA.data.dest_addr)
                 mask = 0;
         }
@@ -42,6 +42,12 @@ void _clear_timeslot(i8 ind)
     nctrl.cur_frame.timeslots[ind].data.dest_addr = 0x00;
     nctrl.cur_frame.timeslots[ind].no_rx_count = 0x00;
     nctrl.cur_frame.timeslots[ind].timeslot_mask = 0x00;
+}
+
+void send_end_frame_state()
+{
+    bc_send((u8*)&nctrl,sizeof(Node_Control));
+    bc_send((u8*)root_node_data, nctrl.total_node_count*2);
 }
 
 void _clock_in_payload()
@@ -61,7 +67,7 @@ void _clock_in_payload()
     if (OUR_TIMESLOT_DATA.data.dest_addr)
         OUR_TIMESLOT_DATA.data.dest_addr = 0;
 
-    // We want to copy these no matter what - as they are filled in when receiving packets as needed    
+    // We want to copy these no matter what - as they are filled in when receiving packets as needed
     for (i8 i = 0; i < MAX_NODE_HOPS; ++i)
         pckt.fwd[i] = nctrl.cur_frame.our_fwds[i];
 
@@ -69,6 +75,7 @@ void _clock_in_payload()
         pckt.removed_node_addr = nctrl.cur_frame.remove_this_frame;
 
     radio_clock_in(pckt.raw_data, RADIO_PAYLOAD_SIZE);
+    bc_send((u8*)pckt.raw_data, RADIO_PAYLOAD_SIZE);
 }
 
 void _clock_out_payload()
@@ -85,12 +92,7 @@ void _clock_out_payload()
     if (nctrl.cur_frame.our_timeslot && (CUR_TIMESLOT_DATA.data.dest_addr == OUR_TIMESLOT_DATA.data.src_addr))
     {
         root_node_data[CUR_TIMESLOT_DATA.data.src_addr] = CUR_TIMESLOT_DATA.data.data;
-        bc_print_int(CUR_TIMESLOT_DATA.data.data,10);
-        bc_print(" from ");
-        bc_print_byte(CUR_TIMESLOT_DATA.data.src_addr,10);
-        bc_print("\n\r");
     }
-
 
     if (pckt.total_node_count > nctrl.total_node_count)
         nctrl.total_node_count = pckt.total_node_count;
@@ -100,14 +102,13 @@ void _clock_out_payload()
 
     // Set the no receive count to zero
     CUR_TIMESLOT_DATA.no_rx_count = 0;
+    bc_send((u8*)pckt.raw_data,RADIO_PAYLOAD_SIZE);
 }
 
 void tx_packet_sent()
 {
     P1OUT &= ~BIT4;
     radio_configure(RADIO_RX);
-    bc_print_byte(nctrl.cur_frame.cur_timeslot - 1, 10);
-    bc_print_crlf(" TX");
 }
 
 void _sync_new_timeslot()
@@ -148,8 +149,6 @@ void _sync_new_timeslot()
 
     // Always send data to source node
     OUR_TIMESLOT_DATA.data.dest_addr = 0x01;
-
-    bc_print_crlf("\n\rNode Sync");
 }
 
 void _handle_removed_nodes()
@@ -203,7 +202,7 @@ void frame_prep_start()
     _set_long_listen();
     rtc_set_interrupt_tick_count(0);
     rtc_set_cb(frame_start);
-    
+
     // Trigger a fresh sensor sample
     soil_sensor_trigger_sample();
     toggel_pin_next_isr = 1;
@@ -233,9 +232,10 @@ void frame_end()
     OUR_TIMESLOT_DATA.data.data = 0x0000;
     OUR_TIMESLOT_DATA.data.dest_addr = 0x00;
 
+    send_end_frame_state();
+#ifdef BC_UART_DEBUG
     bc_print_int(nctrl.cur_frame.ind, 10);
     bc_print(" Frames\n\r\r\n");
-#ifdef BC_UART_DEBUG
     bc_print("\n\rNodes:");
     bc_print_byte(nctrl.total_node_count, 10);
     bc_print("\n\r");
@@ -350,10 +350,9 @@ void rx_packet_received()
         _rx_end_next_rx();
     }
 
+#ifdef DBC_UART_DEBUG
     bc_print_int(nctrl.cur_frame.cur_timeslot - 1, 10);
     bc_print(" RX\n\r");
-
-#ifdef DBC_UART_DEBUG
 #ifdef RADIO_DEBUG_RX_PACKET
     bc_print("fi: ");
     bc_print_byte(pckt.frame_ind, 10);
@@ -474,7 +473,9 @@ void turn_rx_off()
         OUR_TIMESLOT_DATA.data.src_addr = 0x01;
         OUR_TIMESLOT_DATA.data.dest_addr = 0x00;
 
+#ifdef BC_UART_DEBUG
         bc_print_crlf("No SYNC TX");
+#endif
         radio_disable();
         radio_configure(RADIO_TX);
         _clock_in_payload();
@@ -587,8 +588,8 @@ void node_control_init()
     bc_print("\n\rRX_ON:");
     bc_print_int(nctrl.t.rx_on, 10);
     bc_print("\n\r");
-#endif
     bc_print_crlf("\n\rInitialized");
+#endif
 }
 
 void node_control_run()

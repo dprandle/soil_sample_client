@@ -21,7 +21,9 @@ void (*COMMAND_FUNC[COMMAND_COUNT])(void) = {_sample_func};
 
 inline void _sample_func()
 {
+#ifdef BC_UART_DEBUG
     bc_print_crlf("Sample");
+#endif
 }
 #else
 #define COMMAND_COUNT 29
@@ -56,12 +58,11 @@ void rx_packet_rcvd()
     bc_print_crlf(debug_rcv_packet);
 }
 
-
 void _radio_clear_interrupts()
 {
-    bc_print("ClearInts: ");    
+    bc_print("ClearInts: ");
     i8 ret = radio_write_register(NRF24L01P_ADDR_STATUS, NRF24L01P_RX_DR | NRF24L01P_TX_DS | NRF24L01P_MAX_RT);
-    bc_print_byte(ret,16);
+    bc_print_byte(ret, 16);
     bc_print("\n\r");
 }
 
@@ -70,9 +71,8 @@ void _radio_set_config_power_up_rx()
     radio_set_pckt_rx_cb(rx_packet_rcvd);
     bc_print("RX Mode: ");
     i8 ret = radio_configure(RADIO_RX);
-    bc_print_byte(ret,16);
+    bc_print_byte(ret, 16);
     bc_print("\n\r");
-
 }
 
 void _radio_set_config_power_up_tx()
@@ -80,7 +80,7 @@ void _radio_set_config_power_up_tx()
     radio_set_pckt_tx_cb(tx_packet_sent);
     bc_print("TX Packet: ");
     i8 ret = radio_configure(RADIO_TX);
-    bc_print_byte(ret,16);
+    bc_print_byte(ret, 16);
     bc_print("\n\r");
     radio_clock_in(debug_tmr_packet, RADIO_PAYLOAD_SIZE);
     radio_enable_pulse();
@@ -90,7 +90,7 @@ void _radio_get_config()
 {
     bc_print("Get CFG: ");
     radio_read_register(NRF24L01P_ADDR_CONFIG, 1);
-    bc_print_byte(rb_read_byte(&rad_rx),16);
+    bc_print_byte(rb_read_byte(&rad_rx), 16);
     bc_print("\n\r");
 }
 
@@ -98,43 +98,39 @@ void _radio_set_freq_channel()
 {
     bc_print("Set CH: ");
     i8 ret = radio_write_register(NRF24L01P_ADDR_RF_CH, 101);
-    bc_print_byte(ret,16);
+    bc_print_byte(ret, 16);
     bc_print("\n\r");
-
 }
 
 void _radio_get_freq_channel()
 {
     bc_print("Get CH: ");
     radio_read_register(NRF24L01P_ADDR_RF_CH, 1);
-    bc_print_byte(rb_read_byte(&rad_rx),16);
+    bc_print_byte(rb_read_byte(&rad_rx), 16);
     bc_print("\n\r");
-
 }
 
 void _radio_set_rf_setup_normal()
 {
     bc_print("Setup RF: ");
     i8 ret = radio_write_register(NRF24L01P_ADDR_RF_SETUP, NRF24L01P_RF_PWR_3);
-    bc_print_byte(ret,16);
+    bc_print_byte(ret, 16);
     bc_print("\n\r");
-
 }
 
 void _radio_set_rf_setup_carrier()
 {
     bc_print("CW: ");
     i8 ret = radio_write_register(NRF24L01P_ADDR_RF_SETUP, NRF24L01P_CONT_WAVE | NRF24L01P_PLL_LOCK | NRF24L01P_RF_PWR_3);
-    bc_print_byte(ret,16);
+    bc_print_byte(ret, 16);
     bc_print("\n\r");
-
 }
 
 void _radio_get_rf_setup()
 {
     bc_print("Get RF: ");
     radio_read_register(NRF24L01P_ADDR_RF_SETUP, 1);
-    bc_print_byte(rb_read_byte(&rad_rx),16);
+    bc_print_byte(rb_read_byte(&rad_rx), 16);
     bc_print("\n\r");
 }
 
@@ -142,16 +138,15 @@ void _radio_set_retransmission()
 {
     bc_print("Set ARETR: ");
     i8 ret = radio_write_register(NRF24L01P_ADDR_SETUP_RETR, NRF24L01P_ARD_500 | 10);
-    bc_print_byte(ret,16);
+    bc_print_byte(ret, 16);
     bc_print("\n\r");
-
 }
 
 void _radio_get_retransmission()
 {
     bc_print("Get ARETR: ");
     radio_read_register(NRF24L01P_ADDR_SETUP_RETR, 1);
-    bc_print_byte(rb_read_byte(&rad_rx),16);
+    bc_print_byte(rb_read_byte(&rad_rx), 16);
     bc_print("\n\r");
 }
 
@@ -159,16 +154,15 @@ void _radio_set_address_width()
 {
     bc_print("Set AddrW: ");
     i8 ret = radio_write_register(NRF24L01P_ADDR_SETUP_RETR, NRF24L01P_AW_3);
-    bc_print_byte(ret,16);
+    bc_print_byte(ret, 16);
     bc_print("\n\r");
-
 }
 
 void _radio_get_address_width()
 {
     bc_print("Get AddrW: ");
     radio_read_register(NRF24L01P_ADDR_SETUP_RETR, 1);
-    bc_print_byte(rb_read_byte(&rad_rx),16);
+    bc_print_byte(rb_read_byte(&rad_rx), 16);
     bc_print("\n\r");
 }
 
@@ -176,16 +170,15 @@ void _radio_set_rx_pipe_enable()
 {
     bc_print("Set PipeEn: ");
     i8 ret = radio_write_register(NRF24L01P_ADDR_EN_RXADDR, NRF24L01P_ERX_P0);
-    bc_print_byte(ret,16);
+    bc_print_byte(ret, 16);
     bc_print("\n\r");
-
 }
 
 void _radio_get_rx_pipe_enable()
 {
     bc_print("Get PipeEn: ");
     radio_read_register(NRF24L01P_ADDR_EN_RXADDR, 1);
-    bc_print_byte(rb_read_byte(&rad_rx),16);
+    bc_print_byte(rb_read_byte(&rad_rx), 16);
     bc_print("\n\r");
 }
 
@@ -193,9 +186,8 @@ void _radio_set_rx_pipe_0_address()
 {
     bc_print("Set P0 Addr: ");
     i8 ret = radio_write_register_data(NRF24L01P_ADDR_RX_ADDR_P0, "node1", 5);
-    bc_print_byte(ret,16);
+    bc_print_byte(ret, 16);
     bc_print("\n\r");
-
 }
 
 void _radio_get_rx_pipe_0_address()
@@ -203,7 +195,7 @@ void _radio_get_rx_pipe_0_address()
     bc_print("Get P0 Addr: ");
     radio_read_register(NRF24L01P_ADDR_RX_ADDR_P0, 5);
     for (int i = 0; i < 5; ++i)
-        bc_print_byte(rb_read_byte(&rad_rx),16);
+        bc_print_byte(rb_read_byte(&rad_rx), 16);
     bc_print("\n\r");
 }
 
@@ -211,9 +203,8 @@ void _radio_set_tx_address()
 {
     bc_print("Set TX Addr: ");
     i8 ret = radio_write_register_data(NRF24L01P_ADDR_TX_ADDR, "node1", 5);
-    bc_print_byte(ret,16);
+    bc_print_byte(ret, 16);
     bc_print("\n\r");
-
 }
 
 void _radio_get_tx_address()
@@ -221,7 +212,7 @@ void _radio_get_tx_address()
     bc_print("Get TX Addr: ");
     radio_read_register(NRF24L01P_ADDR_TX_ADDR, 5);
     for (int i = 0; i < 5; ++i)
-        bc_print_byte(rb_read_byte(&rad_rx),16);
+        bc_print_byte(rb_read_byte(&rad_rx), 16);
     bc_print("\n\r");
 }
 
@@ -229,16 +220,15 @@ void _radio_set_auto_ack()
 {
     bc_print("Set AA: ");
     i8 ret = radio_write_register(NRF24L01P_ADDR_EN_AA, NRF24L01P_ENAA_P0);
-    bc_print_byte(ret,16);
+    bc_print_byte(ret, 16);
     bc_print("\n\r");
-
 }
 
 void _radio_get_auto_ack()
 {
     bc_print("Get AA: ");
     radio_read_register(NRF24L01P_ADDR_EN_AA, 1);
-    bc_print_byte(rb_read_byte(&rad_rx),16);
+    bc_print_byte(rb_read_byte(&rad_rx), 16);
     bc_print("\n\r");
 }
 
@@ -246,16 +236,15 @@ void _radio_set_pipe_dynamic_payload()
 {
     bc_print("Set DynP: ");
     i8 ret = radio_write_register(NRF24L01P_ADDR_DYNPD, 0);
-    bc_print_byte(ret,16);
+    bc_print_byte(ret, 16);
     bc_print("\n\r");
-
 }
 
 void _radio_get_pipe_dynamic_payload()
 {
     bc_print("Get DynP: ");
     radio_read_register(NRF24L01P_ADDR_DYNPD, 1);
-    bc_print_byte(rb_read_byte(&rad_rx),16);
+    bc_print_byte(rb_read_byte(&rad_rx), 16);
     bc_print("\n\r");
 }
 
@@ -263,16 +252,15 @@ void _radio_set_features()
 {
     bc_print("Set Feat: ");
     i8 ret = radio_write_register(NRF24L01P_ADDR_FEATURE, 0);
-    bc_print_byte(ret,16);
+    bc_print_byte(ret, 16);
     bc_print("\n\r");
-
 }
 
 void _radio_get_features()
 {
     bc_print("Get Feat: ");
     radio_read_register(NRF24L01P_ADDR_FEATURE, 1);
-    bc_print_byte(rb_read_byte(&rad_rx),16);
+    bc_print_byte(rb_read_byte(&rad_rx), 16);
     bc_print("\n\r");
 }
 
@@ -280,7 +268,7 @@ void _radio_get_fifo_status()
 {
     bc_print("Get FIFO_St: ");
     radio_read_register(NRF24L01P_ADDR_FIFO_STATUS, 1);
-    bc_print_byte(rb_read_byte(&rad_rx),16);
+    bc_print_byte(rb_read_byte(&rad_rx), 16);
     bc_print("\n\r");
 }
 
@@ -288,7 +276,7 @@ void _radio_get_packet_stats()
 {
     bc_print("Get PcktSts: ");
     radio_read_register(NRF24L01P_ADDR_OBSERVE_TX, 1);
-    bc_print_byte(rb_read_byte(&rad_rx),16);
+    bc_print_byte(rb_read_byte(&rad_rx), 16);
     bc_print("\n\r");
 }
 
@@ -296,7 +284,7 @@ void _radio_get_rx_power()
 {
     bc_print("Get RxPwr: ");
     radio_read_register(NRF24L01P_ADDR_RPD, 1);
-    bc_print_byte(rb_read_byte(&rad_rx),16);
+    bc_print_byte(rb_read_byte(&rad_rx), 16);
     bc_print("\n\r");
 }
 
@@ -357,6 +345,13 @@ void bc_init()
     _uart_init();
 }
 
+void bc_send(u8 * data, u8 size)
+{
+    rb_write(data, size, &bc_tx);
+    _transmit_burst();
+}
+
+#ifdef BC_UART_DEBUG
 void bc_print_crlf(const char * str)
 {
     bc_print(str);
@@ -390,6 +385,7 @@ void bc_print_raw(i8 byte)
     rb_write_byte(byte, &bc_tx);
     _transmit_burst();
 }
+#endif
 
 void _check_command()
 {
@@ -458,13 +454,17 @@ __interrupt_vec(USCI_A0_VECTOR) void uart_backchannel_ISR(void)
         // Echo with newline if \r
         if (byte == '\r')
         {
+#ifdef BC_UART_DEBUG
             bc_print("\r\n");
+#endif
             CHECK_FOR_COMMAND_FUNC = _check_command;
             LPM4_EXIT;
         }
         else
         {
+#ifdef BC_UART_DEBUG
             bc_print_raw(byte);
+#endif
         }
         break;
     case (USCI_UART_UCTXIFG):

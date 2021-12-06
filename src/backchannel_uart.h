@@ -10,6 +10,9 @@ void bc_init();
 
 void bc_update();
 
+void bc_send(u8 * data, u8 size);
+
+#ifdef BC_UART_DEBUG
 void bc_print(const char * str);
 
 void bc_print_crlf(const char * str);
@@ -19,6 +22,7 @@ void bc_print_byte(i8 byte, i8 base);
 void bc_print_int(i16 byte, i8 base);
 
 void bc_print_raw(i8 byte);
+#endif
 
 static void _transmit_burst();
 

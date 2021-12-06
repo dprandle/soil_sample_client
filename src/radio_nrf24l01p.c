@@ -207,15 +207,17 @@ void radio_init()
     // Set the channel
     i8 ret4 = radio_write_register(NRF24L01P_ADDR_RF_CH, RF_CHANNEL);
 
+#ifdef BC_UART_DEBUG
     bc_print("Set PL Width: ");
-    bc_print_byte(ret1,16);
+    bc_print_byte(ret1, 16);
     bc_print("\n\rTurn of RETR: ");
-    bc_print_byte(ret2,16);
+    bc_print_byte(ret2, 16);
     bc_print("\n\rDisable ENAA: ");
-    bc_print_byte(ret3,16);
+    bc_print_byte(ret3, 16);
     bc_print("\n\rSet RF CH: ");
-    bc_print_byte(ret4,16);
+    bc_print_byte(ret4, 16);
     bc_print("\n\r");
+#endif
 }
 
 i8 radio_write_register(i8 regaddr, i8 byte)
@@ -253,15 +255,11 @@ void radio_update()
         {
             if (rx_cback)
                 rx_cback();
-            else
-                bc_print_crlf("No RX CB");
         }
         else
         {
             if (tx_cback)
                 tx_cback();
-            else
-                bc_print_crlf("No TX CB");
         }
         i8 ret = radio_clear_interrupts();
 #ifdef RADIO_DEBUG_SPI

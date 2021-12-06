@@ -13,7 +13,7 @@
 #define OUR_TIMESLOT_DATA nctrl.cur_frame.timeslots[nctrl.cur_frame.our_timeslot-1]
 #define CUR_TIMESLOT_DATA nctrl.cur_frame.timeslots[nctrl.cur_frame.cur_timeslot-1]
 #define TS_DATA(tsnum) nctrl.cur_frame.timeslots[tsnum-1]
-#define NO_RX_COUNT 1
+#define NO_RX_COUNT 3
 #define DELTA_TO_SEND 20
 #define NODE_OUTSIDE_NEIGHBORHOOD 0x8000
 
