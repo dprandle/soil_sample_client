@@ -52,6 +52,7 @@ typedef struct
 typedef struct
 {
     u8 rx_on;
+    u8 padding;
     u16 rx_packet_to_tx;
     u16 rx_packet_to_rx;
     u16 rx_no_packet_to_tx;
@@ -70,6 +71,7 @@ typedef struct
     u8 frame_extra_drift_listen;
     u8 packet_listen;
     u8 tx_to_rx_measured_delay;
+    u8 padding;
 } RTC_Cycle_Source; // 8 bytes
 
 typedef struct

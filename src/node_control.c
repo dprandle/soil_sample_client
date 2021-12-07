@@ -16,6 +16,7 @@ u16 root_node_data[MAX_NODE_HOPS * MAX_TIMESLOTS_PER_FRAME] = {};
 static void _sample_callback()
 {
     OUR_TIMESLOT_DATA.data.data = soil_sensor_get_latest_sample();
+    root_node_data[OUR_TIMESLOT_DATA.data.src_addr] = OUR_TIMESLOT_DATA.data.data;
     if ((OUR_TIMESLOT_DATA.data.data > (prev_sample + DELTA_TO_SEND)) || ((OUR_TIMESLOT_DATA.data.data + DELTA_TO_SEND) < prev_sample))
     {
         OUR_TIMESLOT_DATA.data.dest_addr = 0x01;
@@ -29,8 +30,7 @@ static void _sample_callback()
             if (TS_DATA(ts).data.src_addr == OUR_TIMESLOT_DATA.data.dest_addr)
                 mask = 0;
         }
-        OUR_TIMESLOT_DATA.data.data |= mask;
-        root_node_data[OUR_TIMESLOT_DATA.data.src_addr] = OUR_TIMESLOT_DATA.data.data;
+        //OUR_TIMESLOT_DATA.data.data |= mask;
         prev_sample = OUR_TIMESLOT_DATA.data.data;
     }
 }
@@ -55,7 +55,7 @@ void send_end_frame_state()
     bc_send((u8*)&nctrl.cur_frame.ind,1);
     bc_send((u8*)&nctrl.cur_frame.remove_next_frame,1);
     bc_send((u8*)&nctrl.cur_frame.remove_this_frame,1);
-    bc_send((u8*)&nctrl.src_t,7);
+    bc_send((u8*)&nctrl.src_t,8);
     bc_send((u8*)&nctrl.t,18);
     bc_send((u8*)root_node_data, 16); // Should be 145 + 4 = 149
 }
