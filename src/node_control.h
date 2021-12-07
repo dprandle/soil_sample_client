@@ -24,7 +24,7 @@ typedef struct
     i8 src_addr;
     i8 dest_addr;
     i16 data;
-} Node_Data;
+} Node_Data; // 4 bytes
 
 typedef union
 {
@@ -40,14 +40,14 @@ typedef union
         Node_Data fwd[MAX_NODE_HOPS];
     };
     char raw_data[PACKET_PAYLOAD_BYTE_SIZE];
-} Timeslot_Packet;
+} Timeslot_Packet; // 32 bytes
 
 typedef struct
 {
     i8 timeslot_mask;
     i8 no_rx_count;
-    Node_Data data;
-} Timeslot_Info;
+    Node_Data data; // 4 bytes
+} Timeslot_Info; // 6 bytes
 
 typedef struct
 {
@@ -60,7 +60,7 @@ typedef struct
     u16 tx_to_rx;
     u16 tx_to_end_frame;
     u16 timeslot;
-} RTC_Set_Values;
+} RTC_Set_Values; // 18 bytes
 
 typedef struct
 {
@@ -70,19 +70,18 @@ typedef struct
     u8 frame_extra_drift_listen;
     u8 packet_listen;
     u8 tx_to_rx_measured_delay;
-} RTC_Cycle_Source;
+} RTC_Cycle_Source; // 8 bytes
 
 typedef struct
 {
     u8 our_timeslot;
     u8 ind;
     u8 cur_timeslot;
-    Node_Data our_fwds[MAX_NODE_HOPS];
-
     u8 remove_next_frame;
     u8 remove_this_frame;
-    Timeslot_Info timeslots[MAX_TIMESLOTS_PER_FRAME];
-} Frame_Info;
+    Node_Data our_fwds[MAX_NODE_HOPS]; // 20 bytes (4) 10?
+    Timeslot_Info timeslots[MAX_TIMESLOTS_PER_FRAME]; // 96 bytes (6).. 32?
+} Frame_Info; // 121 bytes... 122 with padding
 
 typedef struct
 {
@@ -91,10 +90,10 @@ typedef struct
     u8 sleep_frame_count;
     u8 total_node_count;
 
-    RTC_Cycle_Source src_t;
-    RTC_Set_Values t;
-    Frame_Info cur_frame;
-} Node_Control;
+    RTC_Cycle_Source src_t; // 8 bytes
+    RTC_Set_Values t; // 18 bytes
+    Frame_Info cur_frame; // 122 bytes
+} Node_Control; // 148 bytes
 
 static void _setup_clocks();
 static void _setup_pins();

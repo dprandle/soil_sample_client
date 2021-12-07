@@ -30,6 +30,7 @@ static void _sample_callback()
                 mask = 0;
         }
         OUR_TIMESLOT_DATA.data.data |= mask;
+        root_node_data[OUR_TIMESLOT_DATA.data.src_addr] = OUR_TIMESLOT_DATA.data.data;
         prev_sample = OUR_TIMESLOT_DATA.data.data;
     }
 }
@@ -46,8 +47,17 @@ void _clear_timeslot(i8 ind)
 
 void send_end_frame_state()
 {
-    bc_send((u8*)&nctrl,sizeof(Node_Control));
-    bc_send((u8*)root_node_data, nctrl.total_node_count*2);
+    bc_send((u8*)&nctrl.timeslots_per_frame,1);
+    bc_send((u8*)&nctrl.startup_listen_frame_count,1);
+    bc_send((u8*)&nctrl.sleep_frame_count,1);
+    bc_send((u8*)&nctrl.total_node_count,1);
+    bc_send((u8*)&nctrl.cur_frame.our_timeslot,1);
+    bc_send((u8*)&nctrl.cur_frame.ind,1);
+    bc_send((u8*)&nctrl.cur_frame.remove_next_frame,1);
+    bc_send((u8*)&nctrl.cur_frame.remove_this_frame,1);
+    bc_send((u8*)&nctrl.src_t,7);
+    bc_send((u8*)&nctrl.t,18);
+    bc_send((u8*)root_node_data, 16); // Should be 145 + 4 = 149
 }
 
 void _clock_in_payload()
